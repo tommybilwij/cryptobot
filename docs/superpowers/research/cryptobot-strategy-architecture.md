@@ -510,6 +510,67 @@ All mechanics inherit from stockbot's `frontend/src/app/strategy-lab/page.tsx` +
 
 **Result**: every load-bearing constraint has a concrete v1 tool. None of it depends on a library that doesn't exist, and most of it ports directly from stockbot.
 
+## Strategy A vs Strategy B head-to-head (Round 5 findings)
+
+This round answers: between Strategy A (alt funding arb / delta-neutral) and Strategy B (cross-sectional alt factor portfolio / directional), which wins on profit? **A wins decisively** — but the answer isn't "pick one"; it's "weight A heavier in the meta-allocator default."
+
+### Head-to-head on every metric
+
+| Dimension | A (funding arb) | B (factor portfolio) | Winner |
+|---|---|---|---|
+| Realised Sharpe (institutional reference) | Cash-and-carry 4.84; stat-arb 2.23; funding arb typical 1.5–2.5 | Directional crypto ~0.8; long-short factor 1.5 (academic) | **A by 3–6×** |
+| 2025 fund-category returns | Market-neutral crypto funds **+14.4%** | Directional crypto funds **−2.5%** | **A by 16.9 pp** |
+| Max drawdown (academic) | ~1.92% on funding arb (60-scenario study, 6 months) | "Subject to severe crashes; single coin can render returns insignificant" | **A** |
+| Edge source | Structural (funding mean-reverts to spot) | Predictive (momentum persistence) | A — structural more durable |
+| Correlation with market | ~0 (delta-neutral) | High (directional) | A — diversifies better |
+| Capacity at $50k+ | ~$1M on majors before basis impact | ~$200k retail before alt liquidity binds | **A** |
+| Build complexity | Higher (multi-leg execution, hedge integrity) | Lower (signal + rebalance) | B easier |
+| Regime sensitivity | Wins in volatile / funding-spike regimes | Wins in trending regimes | Mixed |
+| Time to first live (per phased plan) | Weeks 7–9 | Weeks 10–14 | A faster |
+
+### Citations for each numerical claim
+
+- **Sharpe 4.84 cash-and-carry vs ~0.8 directional** — [Sharpe.ai delta-neutral 2026](https://sharpe.ai/blog/delta-neutral-trading-crypto)
+- **Market-neutral funds +14.4% / directional funds −2.5% in 2025** — same source; category-level realised performance
+- **Funding arb academic: 115.9% / 6 months, 1.92% max DD** — [ScienceDirect: Risk/Return of Funding Rate Arb on CEX/DEX](https://www.sciencedirect.com/science/article/pii/S2096720925000818)
+- **Crypto momentum severe-crash characterisation** — [Springer: Cryptocurrency Momentum Has (Not) Its Moments](https://link.springer.com/article/10.1007/s11408-025-00474-9)
+- **Long-short factor weekly alpha 2.62% (t=4.22)** — [Cambridge: Trend Factor for the Cross Section of Cryptocurrency Returns](https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/trend-factor-for-the-cross-section-of-cryptocurrency-returns/4C1509ACBA33D5DCAF0AC24379148178)
+- **Alt-coin retail liquidity threshold** (>$10k mid-cap positions fail "exit 80% in 24h at <3% slippage") — [SpottedCrypto Altcoin Comparison Framework 2026](https://www.spotedcrypto.com/altcoin-comparison-framework-2026-risk-tiers/)
+
+### Revised default allocation
+
+The Round 2 default treated A and B as roughly equal (0.30 each). Round 5 data updates the default to favour A:
+
+| Allocation mode (within the overlay portion of capital) | Funding arb (A) | Factor portfolio (B) | Rationale |
+|---|---|---|---|
+| **Static (new default)** | **65%** | **35%** | Reflects 2–3× Sharpe advantage to A without abandoning B's regime-uncorrelated alpha |
+| Sharpe-weighted (live, after 30+ days each) | ~70% | ~30% | Lets the live data refine the static default |
+| Risk-parity | ~60% | ~40% | Equal risk contribution; B gets slightly more weight |
+
+Concretely in the profile JSON for `balanced_v1`:
+
+```jsonc
+"strategies": {
+  "funding_arb":     { "enabled": true, "allocation_pct": 0.40 },  // was 0.30
+  "factor_portfolio":{ "enabled": true, "allocation_pct": 0.20 },  // was 0.30
+  "meta_allocator":  { "method": "sharpe_weighted", "static_weights": { "hlp": 0.40, "funding_arb": 0.40, "factor_portfolio": 0.20 } }
+}
+```
+
+Total still allocates 40% to HLP (Round 2 baseline); the active overlay's 60% now splits ~65/35 between A and B (40%/20% of total equity).
+
+### Why B still belongs (don't be tempted to drop it)
+
+1. **Uncorrelated regime profile.** A's edge compresses in calm funding-rate regimes (see Round 2 finding that current HLP APY is ~10%, half its lifetime). B's edge in those same regimes can be positive — momentum persistence isn't tied to funding.
+2. **Stockbot expertise leverage.** B is where your existing scoring engine, IC tracker, regime detector, and component graveyard pay back. Dropping B is dropping the highest-leverage transfer from stockbot.
+3. **Future trending markets.** 2026's calmer regime won't last forever. When the next strong trend phase arrives, B captures momentum directly; A merely captures the funding-rate side-effect (which is smaller).
+4. **Free option on regime change.** Running B at 20% allocation costs little if it underperforms (small position), but pays multiples in a trending regime when A is compressed.
+
+### Open questions
+
+- **Live IC of B's components vs academic Sharpe.** Academic 2.62% weekly alpha ≠ your implementation's realised alpha. Need 30+ days of IC tracker data before sizing B confidently.
+- **A's current-regime Sharpe.** Round 2 noted current funding rates couldn't be retrieved via WebFetch. If May-2026 funding is compressed, A's APR may land at 5–8%, not 15–25%. Re-measure A after 30 days live.
+
 ## Operational picks (definitive — as of 2026-05-23)
 
 Distilled from the research above. These are the v1 forced picks; per-choice rationale is in the sections above.
@@ -677,3 +738,12 @@ For AUD → USDC: **Independent Reserve** or **Swyftx** (AU-registered, AUSTRAC-
 - [DEV — No HOT updates on JSONB (write amplification)](https://dev.to/mongodb/no-hot-updates-on-jsonb-13k7) — caveat acknowledged; irrelevant at our apply cadence
 - [DanLevy — JSONB seduction](https://danlevy.net/the-jsonb-seduction/) — when JSONB hurts (overusing it for relational data); we only use it for the profile blob
 - [Towards Data Science — Pydantic + Hydra for ML configs](https://towardsdatascience.com/configuration-management-for-model-training-experiments-using-pydantic-and-hydra-d14a6ae84c13/) — Hydra fits ML experiment sweeps, not our JSONB-blob + UI-driven shape
+
+### Round 5 sources (A vs B head-to-head)
+
+- [Sharpe.ai — Delta-neutral trading: market-agnostic crypto strategies](https://sharpe.ai/blog/delta-neutral-trading-crypto) — Sharpe 4.84 cash-and-carry; market-neutral +14.4% vs directional −2.5% in 2025
+- [ScienceDirect — Risk and Return Profiles of Funding Rate Arbitrage on CEX and DEX](https://www.sciencedirect.com/science/article/pii/S2096720925000818) — academic study: 115.9% / 6 months, 1.92% max DD on 60 funding-arb scenarios
+- [Springer — Cryptocurrency Momentum Has (Not) Its Moments](https://link.springer.com/article/10.1007/s11408-025-00474-9) — momentum crash characterisation, single-coin disruption risk
+- [Cambridge JFQA — A Trend Factor for the Cross Section of Cryptocurrency Returns](https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/trend-factor-for-the-cross-section-of-cryptocurrency-returns/4C1509ACBA33D5DCAF0AC24379148178) — long-short factor weekly alpha 2.62% (t=4.22)
+- [Unravel.finance — Cross-Sectional Alpha Factors in Crypto: 2+ Sharpe Without Overfitting](https://blog.unravel.finance/p/cross-sectional-alpha-factors-in) — practitioner perspective on crypto factors
+- [SpottedCrypto — Altcoin Comparison Framework 2026 (Risk Tiers & Liquidity)](https://www.spotedcrypto.com/altcoin-comparison-framework-2026-risk-tiers/) — retail capacity test: 80% exit in 24h at <3% slippage
