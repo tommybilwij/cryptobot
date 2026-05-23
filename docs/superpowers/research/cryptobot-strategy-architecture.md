@@ -220,6 +220,47 @@ Next.js (Strategy Lab UI) ──HTTP/WS──▶ FastAPI "brain" process
 
 Process boundaries are chosen for **crash isolation**, not performance. One Freqtrade process crashing must not take down the brain or sibling strategies. `asyncio` within each process; no threads.
 
+### Strategy isolation and conflict prevention
+
+Strategies A (alt funding arb) and B (factor portfolio) can collide on the same alt coin in four real ways:
+
+1. **Opposite directions** — A wants long-spot-SOL + short-perp-SOL (funding hedge); B's factor score puts SOL in the bottom decile and wants short SOL. Mathematically the net is coherent (funding capture + directional short stacked), but the OMS sees divergent orders.
+2. **Margin competition** — both consume margin on the same exchange; without isolation, the exchange margin engine treats both as one combined position and A's risk model thinks B's exposure is its own.
+3. **Funding-payment attribution** — exchange pays funding on the *net* perp position. Without per-strategy attribution you cannot tell whose strategy earned what funding payment.
+4. **Hedge integrity** — A's spot+perp pair depends on staying matched. B operating on the same coin can pull the *apparent* net exposure away from delta-neutral, even when A's own legs are still balanced.
+
+#### v1 mitigation: sub-accounts per strategy
+
+All target venues support sub-accounts (or, on Hyperliquid, separate trading wallets):
+
+| Venue | Sub-accounts / wallets |
+|---|---|
+| **Binance** | `strategy_a_arb` — spot leg of funding arb |
+| **Bybit** | `strategy_a_arb` — perp leg of funding arb (if Bybit-hedged) |
+| **Hyperliquid** | `hlp_deposit` (vault only, no trading) + `strategy_a_arb` (perp leg if HL-hedged) + `strategy_b_pf` (factor portfolio positions) |
+
+Each strategy gets its own margin pool, position list, and funding receipt. Capital cost: small idle margin per sub. **Bulletproof isolation at near-zero engineering cost.**
+
+#### Fallback if sub-accounts aren't available: `strategy_id` attribution
+
+When sub-accounts aren't possible, the OMS tags every order with the issuing strategy via the `client_order_id` format already defined: `{strategy}-{symbol}-{ts}-{nonce}`. The `positions` table carries `strategy_id` as a foreign key. Per-strategy P&L attribution becomes a `GROUP BY strategy_id` query. Funding payments split pro-rata by perp position size at the funding moment.
+
+#### Always-on: cross-strategy risk filter (profile-driven)
+
+Independent of which isolation layer is active, the brain enforces global gates from the profile *before* any strategy's order routes:
+
+| Profile key | Behaviour |
+|---|---|
+| `risk.max_gross_per_asset_pct` | Sum of \|position\| across all strategies on any single coin can't exceed this fraction of equity |
+| `risk.hedge_pair_protection` | Pairs registered in A's hedge book are protected — B cannot open offsetting positions on the same coin without explicit override |
+| `risk.per_venue_margin_cap_pct` | Total margin used on a single venue across all strategies can't exceed this fraction of equity |
+
+This layer is global risk hygiene; it applies whether sub-accounts isolate the strategies or not.
+
+#### v1 forced choice
+
+**Sub-accounts per strategy on every venue + always-on cross-strategy risk filter from the profile.** Skip the `strategy_id`-attribution OMS path until v1 is live and you've actually felt the friction. Migration from sub-accounts to single-account-with-attribution is a clean later refactor; the reverse is much harder.
+
 ### WebSocket reliability patterns
 
 | Pattern | Why |
