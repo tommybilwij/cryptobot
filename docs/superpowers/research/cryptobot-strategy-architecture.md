@@ -391,6 +391,125 @@ The backtester takes a `profile_id`, enumerates `enabled = true` strategies, and
 - Pre-aggregated 1-min klines alongside raw trades — avoid re-aggregating on every backtest
 - Bulk inserts batched (1 s or 1k rows, whichever first) — never one-row-per-insert
 
+## Profile persistence and enforcement tooling (Round 4 findings)
+
+The load-bearing constraints (Constraint #1: no hardcoded values, #2: same profile drives backtest+live, #3: leak-gap prevention, #4: UI from registry, #5: decision audit, #6: CI lints) need concrete tooling. Round 4 confirms the pattern is implementable end-to-end and identifies v1 tools.
+
+### Registry pattern: roll-your-own, proven by stockbot
+
+No third-party library does the leak-gap-prevented registry pattern exactly as we need it. Stockbot's solution is the reference (verified by reading `backend/app/services/profile_defaults.py` and `backend/app/api/strategy_profiles.py`):
+
+- Three typed registry dicts in one module:
+  - `PROFILE_SCOPED_DEFAULTS: dict[str, float]` — numeric + bool keys (booleans stored as 0.0/1.0)
+  - `PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str]` — enums and free-text keys
+  - `PROFILE_SCOPED_DICT_DEFAULTS: dict[str, dict]` — nested config (e.g. scoring weights)
+- `apply_profile` iterates all three at apply time, writing defaults for any key the new profile omits
+- `unapplied_keys()` helpers return the diff so the reset is explicit and auditable
+
+This is mechanical to port: copy stockbot's module structure, swap keys for crypto-native ones, done. No new library needed.
+
+### Validation: Pydantic v2
+
+Pydantic v2 (already in the python-fastapi stack) provides schema validation for each profile section:
+
+```python
+class FundingArbProfile(BaseModel):
+    enabled:           bool  = True
+    allocation_pct:    float = Field(ge=0, le=1, default=0.30)
+    entry_bps_per_8h:  float = Field(ge=-100, le=100, default=8.0)
+    venues_spot:       list[str] = Field(default_factory=lambda: ["binance"])
+    sub_account:       str = "strategy_a_arb"
+```
+
+At apply time: `model_validate(incoming_jsonb)` — type errors and range violations soft-reject the profile with a logged reason, never silently coerce.
+
+### Storage: Postgres JSONB + atomic apply via transaction
+
+Stockbot's `strategy_profiles` table is the template — one row per profile, JSONB blob, `is_active` flag, integer `version` column. Apply mechanism is one Postgres transaction:
+
+```sql
+BEGIN;
+UPDATE strategy_profiles SET is_active = false WHERE is_active = true;
+UPDATE strategy_profiles SET is_active = true, version = version + 1
+  WHERE id = :new_profile_id;
+-- application-code registry walk happens inside this same transaction
+COMMIT;
+```
+
+Caveats:
+- **JSONB write amplification** — updating any key rewrites the whole row + all indexes. Not a problem because profile apply is rare (manual UI action, not hot path). — [DEV: No HOT updates on JSONB](https://dev.to/mongodb/no-hot-updates-on-jsonb-13k7)
+- **MVCC handles concurrency** — readers see the old profile until commit; no torn reads. — [Brandur: How Postgres makes transactions atomic](https://brandur.org/postgres-atomicity)
+- **Don't over-use JSONB** — operational config (DB URL, exchange credentials, scheduler crons) lives in the regular `settings` table; only profile-scoped strategy knobs go in the JSONB blob. — [DanLevy: JSONB seduction](https://danlevy.net/the-jsonb-seduction/)
+
+### CI lint: Ruff PLR2004 + a custom 20-line AST script
+
+**Ruff PLR2004 (`magic-value-comparison`)** is the built-in starting point — flags unnamed numeric constants in comparisons. Excludes 0, 1, "", "__main__" by default. — [Ruff PLR2004 docs](https://docs.astral.sh/ruff/rules/magic-value-comparison/)
+
+**Limitation found**: Ruff does NOT support custom rules; you can't write a plugin like Flake8/Pylint allows. To enforce "no numeric literals in `backend/app/strategies/**.py`" specifically, ship a small custom AST script that runs in pre-commit + CI:
+
+```python
+# scripts/lint_no_literals_in_strategies.py
+import ast, pathlib, sys
+ALLOWED = {0, 1, -1}
+SCAN_DIR = pathlib.Path("backend/app/strategies")
+violations: list[tuple[pathlib.Path, int, float]] = []
+for p in SCAN_DIR.rglob("*.py"):
+    tree = ast.parse(p.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            if node.value not in ALLOWED:
+                violations.append((p, node.lineno, node.value))
+for p, line, val in violations:
+    print(f"{p}:{line}: numeric literal {val!r} - move to profile registry")
+sys.exit(1 if violations else 0)
+```
+
+20 lines, no dependencies. Combine with three pytest assertions:
+
+| Assertion | What it catches |
+|---|---|
+| Every `params.get(path)` string argument resolves to a key in the registry | Typos / orphan paths in strategy code |
+| Every registry key is referenced by at least one `params.get` | Dead keys in the registry |
+| Every FieldDef key in `frontend/.../strategy-lab/page.tsx` matches a registry key | UI drift from backend |
+
+— [Ruff custom-rule limitation tracking issue](https://github.com/astral-sh/ruff/issues/10009)
+
+### Skip: Hydra / OmegaConf / dynaconf
+
+- **Hydra** (Meta's ML-experiment config framework) — designed for hierarchical YAML + sweeps; powerful but wrong shape for our JSONB-blob + UI-driven workflow
+- **OmegaConf** — Hydra's underlying library, same mismatch
+- **dynaconf** — env-var + file-based config layering; doesn't help with JSONB-in-DB + atomic apply
+
+**Pydantic v2 + roll-your-own registry + custom AST script** is leaner and more aligned with our constraints than any of these. — [Towards Data Science: Pydantic + Hydra for ML experiments](https://towardsdatascience.com/configuration-management-for-model-training-experiments-using-pydantic-and-hydra-d14a6ae84c13/) (shows the use case where Hydra fits — and by contrast where it doesn't)
+
+### Save / load / clone / A-B compare — UI + API surface
+
+All mechanics inherit from stockbot's `frontend/src/app/strategy-lab/page.tsx` + `backend/app/api/strategy_profiles.py`:
+
+| Operation | Endpoint | Behaviour |
+|---|---|---|
+| Save (new version) | `POST /api/v1/strategy_profiles` | Pydantic-validates JSONB, inserts new row, never destructive |
+| Load | `GET /api/v1/strategy_profiles/{id}` | Returns JSONB; Strategy Lab hydrates FieldDefs from it |
+| Apply | `POST /api/v1/strategy_profiles/{id}/apply` | Atomic transaction + registry walk (leak-gap prevention) |
+| Clone | `POST /api/v1/strategy_profiles/{id}/clone` | Copies JSONB into a new row with a new name + version=1 |
+| A/B compare | `POST /api/v1/backtest/compare` `{profile_id_a, profile_id_b}` | Runs two backtests, returns equity curves + per-strategy metrics |
+| History | `GET /api/v1/strategy_profiles?name=balanced_v1` | Returns all versions in time order; `is_active=false` rows kept |
+| Export / import JSON | `GET/POST /api/v1/strategy_profiles/{id}/export` | Round-trip JSON for off-system sharing or git-committed profiles |
+
+### v1 forced picks for profile mechanics
+
+| Concern | Tool | Source / reference |
+|---|---|---|
+| Registry of profile-scoped keys + defaults | Plain Python dict module, three typed sub-dicts | Stockbot `services/profile_defaults.py` |
+| Schema validation at apply time | Pydantic v2 `BaseModel` per strategy section | dev-toolkit-python-fastapi stack |
+| JSONB storage | Postgres `strategy_profiles` table | Stockbot `models/strategy_profile.py` |
+| Atomic apply with leak-gap prevention | Single Postgres transaction + registry walk | Stockbot `api/strategy_profiles.py::apply_profile` |
+| Hardcoded-literal CI check | Ruff PLR2004 + custom 20-line AST script | `scripts/lint_no_literals_in_strategies.py` |
+| Registry ↔ usage cross-check | pytest assertions | `backend/tests/test_profile_registry.py` |
+| Strategy Lab UI (save/load/clone/A-B/history) | Next.js page | Forked from stockbot `strategy-lab/page.tsx` |
+
+**Result**: every load-bearing constraint has a concrete v1 tool. None of it depends on a library that doesn't exist, and most of it ports directly from stockbot.
+
 ## Operational picks (definitive — as of 2026-05-23)
 
 Distilled from the research above. These are the v1 forced picks; per-choice rationale is in the sections above.
@@ -549,3 +668,12 @@ For AUD → USDC: **Independent Reserve** or **Swyftx** (AU-registered, AUSTRAC-
 - [Index.dev — ClickHouse vs QuestDB vs TimescaleDB 2026](https://www.index.dev/skill-vs-skill/database-timescaledb-vs-clickhouse-vs-questdb) — time-series DB comparison
 - [QuestDB — Benchmark vs ClickHouse](https://questdb.com/blog/clickhouse-vs-questdb-comparison/) — ingest + query throughput, Parquet interop
 - [CoinMarketCap — Best Crypto API for Trading Bots 2026](https://coinmarketcap.com/academy/article/best-crypto-api-for-trading-bots-and-algorithmic-trading-2026) — reliability patterns for production bots
+
+### Round 4 sources (profile persistence + enforcement tooling)
+
+- [Ruff PLR2004 magic-value-comparison rule](https://docs.astral.sh/ruff/rules/magic-value-comparison/) — built-in magic-number detection
+- [Ruff custom-rule limitation tracking issue](https://github.com/astral-sh/ruff/issues/10009) — confirms Ruff doesn't support plugins; AST script is the path
+- [Brandur — How Postgres makes transactions atomic](https://brandur.org/postgres-atomicity) — MVCC + atomic apply semantics
+- [DEV — No HOT updates on JSONB (write amplification)](https://dev.to/mongodb/no-hot-updates-on-jsonb-13k7) — caveat acknowledged; irrelevant at our apply cadence
+- [DanLevy — JSONB seduction](https://danlevy.net/the-jsonb-seduction/) — when JSONB hurts (overusing it for relational data); we only use it for the profile blob
+- [Towards Data Science — Pydantic + Hydra for ML configs](https://towardsdatascience.com/configuration-management-for-model-training-experiments-using-pydantic-and-hydra-d14a6ae84c13/) — Hydra fits ML experiment sweeps, not our JSONB-blob + UI-driven shape
