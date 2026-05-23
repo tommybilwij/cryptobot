@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "name": "paper_safari",
+    "version": 1,
+    "description": "Tiny sizes for paper-trading reality testing. Set Freqtrade dry_run=true."
+  },
+  "universe": {
+    "core_pairs": ["BTCUSDT", "ETHUSDT"],
+    "alt_universe_size": 20
+  },
+  "strategies": {
+    "funding_arb": {
+      "enabled": true,
+      "allocation_pct": 0.01,
+      "max_position_pct": 0.01
+    },
+    "factor_portfolio": {
+      "enabled": true,
+      "allocation_pct": 0.01
+    },
+    "meta_allocator": {
+      "enabled": false,
+      "method": "static"
+    }
+  },
+  "risk": {
+    "max_gross_leverage": 1.0,
+    "max_gross_per_asset_pct": 0.02
+  },
+  "execution": {
+    "default_order_type": "post_only_limit",
+    "max_slippage_bps": 50
+  }
+}

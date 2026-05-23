@@ -1,0 +1,50 @@
+[project]
+name = "cryptobot-backend"
+version = "0.2.0"
+description = "Cryptobot backend — FastAPI + profile system"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "psycopg[binary]>=3.3.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "mypy>=1.10",
+    "ruff>=0.5",
+    "aiosqlite>=0.20",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "PL"]
+ignore = ["E501", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests run from cd backend, so paths are relative to backend/.
+# Magic numbers (PLR2004) are fine in tests; deferred imports (PLC0415) in
+# conftest fixtures avoid pulling the app at collection time.
+"tests/**" = ["PLR2004", "PLC0415"]
+"app/strategies/**" = []                           # NO exceptions — strict zero-literals here
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/versions/.*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

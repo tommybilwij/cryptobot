@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cryptobot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cryptobot
+      POSTGRES_USER: cryptobot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cryptobot -d cryptobot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-api
+    restart: unless-stopped
+    command: uv run fastapi run app/main.py --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-worker
+    restart: unless-stopped
+    command: uv run python -m app.worker.main
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  strategy-runner-funding-arb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-strategy-runner-funding-arb
+    restart: unless-stopped
+    command: uv run python -m app.strategy_runner.main --strategy-name funding_arb
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  strategy-runner-factor-portfolio:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-strategy-runner-factor-portfolio
+    restart: unless-stopped
+    command: uv run python -m app.strategy_runner.main --strategy-name factor_portfolio
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

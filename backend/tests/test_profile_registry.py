@@ -1,0 +1,93 @@
+"""Tests for profile registry self-consistency."""
+from __future__ import annotations
+
+import ast
+import pathlib
+
+from app.profile.defaults import (
+    PROFILE_SCOPED_DEFAULTS,
+    PROFILE_SCOPED_DICT_DEFAULTS,
+    PROFILE_SCOPED_STRING_DEFAULTS,
+    all_profile_keys,
+)
+
+REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
+STRATEGIES_DIR = REPO_ROOT / "backend" / "app" / "strategies"
+
+
+def test_no_key_appears_in_more_than_one_registry() -> None:
+    """A path cannot be registered as both numeric and string, etc."""
+    numeric = set(PROFILE_SCOPED_DEFAULTS)
+    string = set(PROFILE_SCOPED_STRING_DEFAULTS)
+    dictv = set(PROFILE_SCOPED_DICT_DEFAULTS)
+    assert numeric & string == set(), "key in both numeric + string registries"
+    assert numeric & dictv == set(), "key in both numeric + dict registries"
+    assert string & dictv == set(), "key in both string + dict registries"
+
+
+def test_all_profile_keys_is_union() -> None:
+    """all_profile_keys() returns the union of the three registries."""
+    expected = (
+        set(PROFILE_SCOPED_DEFAULTS)
+        | set(PROFILE_SCOPED_STRING_DEFAULTS)
+        | set(PROFILE_SCOPED_DICT_DEFAULTS)
+    )
+    assert all_profile_keys() == expected
+
+
+def test_numeric_defaults_are_numeric() -> None:
+    """PROFILE_SCOPED_DEFAULTS values must be int or float."""
+    for key, value in PROFILE_SCOPED_DEFAULTS.items():
+        assert isinstance(value, (int, float)), (
+            f"non-numeric default for {key}: {value!r}"
+        )
+
+
+def test_string_defaults_are_strings() -> None:
+    """PROFILE_SCOPED_STRING_DEFAULTS values must be str."""
+    for key, value in PROFILE_SCOPED_STRING_DEFAULTS.items():
+        assert isinstance(value, str), f"non-string default for {key}: {value!r}"
+
+
+def test_dict_defaults_are_dicts() -> None:
+    """PROFILE_SCOPED_DICT_DEFAULTS values must be dict."""
+    for key, value in PROFILE_SCOPED_DICT_DEFAULTS.items():
+        assert isinstance(value, dict), f"non-dict default for {key}: {value!r}"
+
+
+def test_dotted_paths_are_valid_identifiers() -> None:
+    """Every dotted path segment must be a valid identifier — no spaces / hyphens."""
+    for key in all_profile_keys():
+        for segment in key.split("."):
+            assert segment.isidentifier(), (
+                f"non-identifier segment {segment!r} in path {key!r}"
+            )
+
+
+def _collect_params_get_paths(py_file: pathlib.Path) -> list[str]:
+    """Return every string passed to a `.get(...)` method call in py_file."""
+    tree = ast.parse(py_file.read_text())
+    paths: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            paths.append(node.args[0].value)
+    return paths
+
+
+def test_every_params_get_path_is_in_registry() -> None:
+    """If a strategy calls `params.get('foo.bar')`, 'foo.bar' must be registered."""
+    registered = all_profile_keys()
+    for py_file in STRATEGIES_DIR.rglob("*.py"):
+        if py_file.name == "base.py":
+            continue
+        for path in _collect_params_get_paths(py_file):
+            assert path in registered, (
+                f"{py_file}: params.get({path!r}) but path not in registry"
+            )

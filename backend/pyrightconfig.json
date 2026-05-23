@@ -1,0 +1,18 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["app", "tests"],
+  "exclude": [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/.ruff_cache",
+    ".venv",
+    "alembic/versions"
+  ],
+  "extraPaths": ["."],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Darwin",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": "error"
+}

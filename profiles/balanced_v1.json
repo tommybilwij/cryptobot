@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "name": "balanced_v1",
+    "version": 1,
+    "description": "Default after both strategies have 30+ days live. Round 5 allocation: A heavier than B."
+  },
+  "universe": {
+    "core_pairs": ["BTCUSDT", "ETHUSDT"],
+    "alt_universe_size": 100,
+    "min_listing_age_days": 30,
+    "min_daily_volume_usd": 5000000
+  },
+  "strategies": {
+    "funding_arb": {
+      "enabled": true,
+      "allocation_pct": 0.40,
+      "entry_bps_per_8h": 8.0,
+      "venues_spot": ["binance"],
+      "venues_perp": ["hyperliquid"],
+      "sub_account": "strategy_a_arb"
+    },
+    "factor_portfolio": {
+      "enabled": true,
+      "allocation_pct": 0.20,
+      "rebalance_cron": "0 8 * * *",
+      "top_decile_pct": 0.10,
+      "shorts_enabled": false,
+      "sub_account": "strategy_b_pf"
+    },
+    "meta_allocator": {
+      "enabled": true,
+      "method": "sharpe_weighted",
+      "rebalance_cron": "0 0 * * SUN",
+      "lookback_days": 30
+    }
+  },
+  "risk": {
+    "max_gross_leverage": 1.50,
+    "max_gross_per_asset_pct": 0.15
+  },
+  "execution": {
+    "default_order_type": "post_only_limit",
+    "max_slippage_bps": 20
+  },
+  "backtest": {
+    "start_date": "2024-01-01",
+    "end_date": "2026-04-30",
+    "fee_model": "per_exchange",
+    "funding_accrual": true,
+    "survivorship_bias_safe": true,
+    "starting_capital_usd": 10000.0
+  }
+}
