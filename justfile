@@ -28,3 +28,33 @@ down:
 # Tail logs from all services (or specify service names)
 logs *args:
     docker compose logs -f "$@"
+
+# Run backend tests
+test *args:
+    cd backend && uv run pytest "$@"
+
+# Run typechecker (mypy strict)
+typecheck:
+    cd backend && uv run mypy app
+
+# Run all linters
+lint:
+    cd backend && uv run ruff check app tests
+    python3 scripts/lint_no_literals_in_strategies.py
+
+# Apply ruff auto-fixes + formatter
+fmt:
+    cd backend && uv run ruff check --fix app tests
+    cd backend && uv run ruff format app tests
+
+# Run Alembic migration to head
+mig-up:
+    cd backend && uv run alembic upgrade head
+
+# Generate a new migration via autogenerate
+mig-new MESSAGE:
+    cd backend && uv run alembic revision --autogenerate -m "{{MESSAGE}}"
+
+# Run the API server in dev (auto-reload)
+api:
+    cd backend && uv run fastapi dev app/main.py
