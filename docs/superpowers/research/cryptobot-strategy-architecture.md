@@ -168,6 +168,84 @@ Year-1 OpEx envelope: **$300–$1,500 total**. Phase 3 ceiling stays under $150/
 
 Implementation detail (profile schema DDL, strategy class signatures, registry key list, etc.) belongs in `superpowers:writing-plans` once the user is ready to start.
 
+## Performance and reliability architecture (Round 3 findings)
+
+Our strategy mix is **not latency-sensitive in the HFT sense** — decisions are minutes-to-days. "Performance" for us means three things, in priority:
+
+1. **Throughput** — multi-year multi-pair backtests in minutes, not hours
+2. **Reliability** — no missed funding payments, no reconciliation drift, no silent WS failures
+3. **Predictable second-scale tail latency** — not microseconds
+
+Sub-second latency is irrelevant; *consistent* second-scale latency is essential.
+
+### Dataframe layer: Polars (not pandas)
+
+10–50× faster than pandas on the operations the backtester runs (rolling windows, group-by, joins, lazy evaluation, parallel + SIMD). For ~50M rows of multi-pair 1-min klines, the gap is "minutes vs hours" per backtest. Default to Polars; only drop to pandas where a library forces it. — [Polars](https://pola.rs/)
+
+### Data layer: DuckDB + Parquet (now), ClickHouse if outgrown
+
+DuckDB querying Parquet files on local disk handles billions of rows with no server. Same Parquet serves backtest + ad-hoc + live feature computation. Migration path if scale exceeds DuckDB (unlikely under $200k capital): **ClickHouse** (3–10× faster aggregations than TimescaleDB, 15–30× compression) or **QuestDB** (writes cold data to Parquet on S3 — interoperable with DuckDB, preserves optionality). Skip TimescaleDB unless Postgres-ecosystem familiarity is the deciding factor. — [Index.dev ClickHouse vs QuestDB vs TimescaleDB 2026](https://www.index.dev/skill-vs-skill/database-timescaledb-vs-clickhouse-vs-questdb), [QuestDB benchmarks](https://questdb.com/blog/clickhouse-vs-questdb-comparison/)
+
+### Framework choice — revisited
+
+Round 2 picked Freqtrade. Round 3 perf research surfaces **NautilusTrader as structurally stronger for Constraint #2** (same code drives backtest and live). The April 2026 release confirms all our target venues are supported: Binance, Bybit, Hyperliquid, OKX, Deribit, dYdX, BitMEX.
+
+| | Freqtrade | NautilusTrader |
+|---|---|---|
+| Time to first live trade | 2–3 weeks | 4–6 weeks (steeper learning curve) |
+| Community / strategies to learn from | Massive (25k+ stars, 7 yrs) | Smaller, growing |
+| **Constraint #2 alignment** | Achievable via bridge layer | **Native default** (shared NautilusKernel) |
+| Throughput at scale | Python single-threaded limit | Rust core, 5M rows/sec, multi-core |
+| Multi-strategy in one process | No (one strategy per process) | Yes (deterministic event-driven kernel) |
+| ML walk-forward | FreqAI included | Roll your own |
+| Built-in dry-run / paper | Yes (single config flag) | Yes (shared kernel for sandbox) |
+| Target venues 2026 | Binance, Bybit, HL (HIP3), 30+ via CCXT | Binance, Bybit, HL, OKX, Deribit, dYdX, BitMEX |
+
+**Forced pick now: Freqtrade for v1** — ship velocity and ecosystem maturity matter more than structural elegance at <$50k capital. **Re-evaluate at $50k+ or once Strategy 2 (factor portfolio) is live**, when NautilusTrader's multi-strategy-one-process + deterministic kernel become genuinely valuable. The bridge-layer pattern (registry → `ProfileParams` → `Strategy.evaluate`) means later migration to NautilusTrader is mechanical, not architectural. — [NautilusTrader architecture docs](https://nautilustrader.io/docs/latest/concepts/architecture/), [NautilusTrader integrations](https://nautilustrader.io/docs/latest/integrations/)
+
+### Process topology
+
+```
+Next.js (Strategy Lab UI) ──HTTP/WS──▶ FastAPI "brain" process
+                                              │
+                                              ├── Postgres (profiles, signals, decisions, IC, tax lots)
+                                              │
+                                              ├── DuckDB → Parquet on disk
+                                              │       (klines, funding, OI, on-chain;
+                                              │        partitioned by exchange/symbol/year/month)
+                                              │
+                                              ├── Freqtrade process 1 (alt funding arb)
+                                              └── Freqtrade process 2 (factor portfolio)
+```
+
+Process boundaries are chosen for **crash isolation**, not performance. One Freqtrade process crashing must not take down the brain or sibling strategies. `asyncio` within each process; no threads.
+
+### WebSocket reliability patterns
+
+| Pattern | Why |
+|---|---|
+| Heartbeat watchdog (force reconnect if no message >N seconds) | Silent stalls are the #1 cause of phantom positions |
+| Normalized symbols (`exchange:base:quote:type`) | Per-venue naming chaos doesn't bleed into strategy code |
+| Deadman switch (flatten on >60s WS death, don't wait for reconnect) | Hoping for reconnect leaves positions unhedged |
+| Immutable trade log (append-only with `profile_hash`) | Post-incident reconstruction impossible without it |
+| Idempotent `client_order_id` (`strategy-symbol-ts-nonce`) | Prevents double-fill on retry |
+| Daily symbol-manifest validation | Symbols get delisted; catch before live-fire |
+
+— [CoinMarketCap — Best Crypto API for Trading Bots 2026](https://coinmarketcap.com/academy/article/best-crypto-api-for-trading-bots-and-algorithmic-trading-2026)
+
+### Hot-path optimization rules
+
+**Don't optimize until benchmarks force it:**
+- Pure-Python strategy logic (`Strategy.evaluate`) — Polars carries the heavy lifting; strategy logic runs in microseconds in pure Python at our scale
+- JSON parsing — `orjson`/`msgspec` only if profiling shows >5% of CPU in JSON
+- Database indexes — DuckDB on partitioned Parquet is fast enough until proven otherwise
+
+**Do optimize from day one (retrofitting is expensive):**
+- Strict types throughout — `mypy --strict` + Pydantic v2 at API boundaries
+- Parquet partitioned by `exchange/symbol/year/month` — partition-pruned queries stay fast forever
+- Pre-aggregated 1-min klines alongside raw trades — avoid re-aggregating on every backtest
+- Bulk inserts batched (1 s or 1k rows, whichever first) — never one-row-per-insert
+
 ## Sources
 
 - [DefiLlama — Hyperliquid HLP TVL/fees](https://defillama.com/protocol/hyperliquid-hlp) — primary-source fee yield, TVL
@@ -197,3 +275,12 @@ Implementation detail (profile schema DDL, strategy class signatures, registry k
 - [Slashdot — CryptoQuant vs Glassnode pricing 2026](https://slashdot.org/software/comparison/CryptoQuant-vs-Glassnode/) — premium-tier pricing
 - [Phemex — Q1 2026 Top 10 Profitable Bot Strategies](https://phemex.com/blogs/top-10-profitable-bot-strategies-q1-2026) — marketplace TVL/bot count
 - [SaintQuant — Quantitative Guide 2026](https://saintquant.com/blog/161-how-to-build-a-profitable-crypto-trading-bot-in-2026-a-quantitative-guide-for-algorithmic-traders) — institutional case study (marketing caveat)
+
+### Round 3 sources
+
+- [NautilusTrader architecture docs](https://nautilustrader.io/docs/latest/concepts/architecture/) — Rust-native kernel, backtest-live parity design
+- [NautilusTrader integrations 2026](https://nautilustrader.io/docs/latest/integrations/) — venue coverage (Binance, Bybit, HL, OKX, Deribit, dYdX, BitMEX)
+- [Polars](https://pola.rs/) — DataFrame library benchmark + design
+- [Index.dev — ClickHouse vs QuestDB vs TimescaleDB 2026](https://www.index.dev/skill-vs-skill/database-timescaledb-vs-clickhouse-vs-questdb) — time-series DB comparison
+- [QuestDB — Benchmark vs ClickHouse](https://questdb.com/blog/clickhouse-vs-questdb-comparison/) — ingest + query throughput, Parquet interop
+- [CoinMarketCap — Best Crypto API for Trading Bots 2026](https://coinmarketcap.com/academy/article/best-crypto-api-for-trading-bots-and-algorithmic-trading-2026) — reliability patterns for production bots
