@@ -76,3 +76,22 @@ async def test_fetch_funding_rates_parses_csv() -> None:
     assert df.height == 3
     assert df.columns == ["ts_ms", "predicted", "realized"]
     assert df["realized"].to_list() == [0.0001, 0.000125, 0.00009]
+
+
+@pytest.mark.asyncio
+async def test_fetch_open_interest_parses_csv() -> None:
+    raw_csv = (FIXTURES / "binance_oi_sample.csv").read_bytes()
+    zipped = _zip_bytes(raw_csv, "BTCUSDT-metrics-2026-04.csv")
+
+    def handler(req: Request) -> Response:
+        assert "metrics" in req.url.path
+        return Response(200, content=zipped)
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        client = BinanceVisionClient(fetcher=fetcher)
+        df = await client.fetch_open_interest("BTCUSDT", 2026, 4)
+
+    assert df.height == 2
+    assert df.columns == ["ts_ms", "oi_base", "oi_quote"]
+    assert df["oi_base"].to_list() == [12345.5, 12350.0]

@@ -52,6 +52,12 @@ class BinanceVisionClient:
             f"{symbol}-fundingRate-{year:04d}-{month:02d}.zip"
         )
 
+    def _oi_url(self, symbol: str, year: int, month: int) -> str:
+        return (
+            f"{BASE_URL}/data/futures/um/monthly/metrics/{symbol}/"
+            f"{symbol}-metrics-{year:04d}-{month:02d}.zip"
+        )
+
     async def fetch_klines_1m(self, symbol: str, year: int, month: int) -> pl.DataFrame:
         url = self._kline_url(symbol, year, month)
         raw = await self._fetcher.get_bytes(url)
@@ -98,6 +104,19 @@ class BinanceVisionClient:
             # Binance archive only has the realized rate; predicted=realized for historicals
             pl.col("last_funding_rate").alias("predicted"),
             pl.col("last_funding_rate").alias("realized"),
+        )
+
+    async def fetch_open_interest(
+        self, symbol: str, year: int, month: int
+    ) -> pl.DataFrame:
+        url = self._oi_url(symbol, year, month)
+        raw = await self._fetcher.get_bytes(url)
+        csv_bytes = _unzip_single(raw)
+        df = pl.read_csv(csv_bytes, has_header=True, try_parse_dates=True)
+        return df.select(
+            (pl.col("create_time").dt.timestamp("ms")).alias("ts_ms"),
+            pl.col("sum_open_interest").cast(pl.Float64).alias("oi_base"),
+            pl.col("sum_open_interest_value").cast(pl.Float64).alias("oi_quote"),
         )
 
 
