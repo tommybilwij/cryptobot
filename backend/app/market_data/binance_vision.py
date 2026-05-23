@@ -79,6 +79,27 @@ class BinanceVisionClient:
             pl.col("volume"),
         )
 
+    async def fetch_funding_rates(
+        self, symbol: str, year: int, month: int
+    ) -> pl.DataFrame:
+        url = self._funding_url(symbol, year, month)
+        raw = await self._fetcher.get_bytes(url)
+        csv_bytes = _unzip_single(raw)
+        df = pl.read_csv(
+            csv_bytes,
+            has_header=True,
+            schema_overrides={
+                "calc_time": pl.Int64,
+                "last_funding_rate": pl.Float64,
+            },
+        )
+        return df.select(
+            pl.col("calc_time").alias("ts_ms"),
+            # Binance archive only has the realized rate; predicted=realized for historicals
+            pl.col("last_funding_rate").alias("predicted"),
+            pl.col("last_funding_rate").alias("realized"),
+        )
+
 
 def _unzip_single(raw: bytes) -> bytes:
     with zipfile.ZipFile(io.BytesIO(raw)) as zf:
