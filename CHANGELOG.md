@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.3.0 (2026-05-24)
+
+#### Features
+- Partitioned Parquet store + DuckDB read layer for historical market data
+- Three exchange downloaders: Binance Vision (klines/funding/OI), Bybit Public (klines), Hyperliquid Archive (trades→klines aggregation)
+- `MarketDataSource` Protocol + `RetryingFetcher` with exponential backoff
+- `DataPipelineService`, `SymbolManifestService` (survivorship-safe), `DataHealthService` (gap detection + event logging)
+- Worker job dispatcher via `WORKER_JOB` env; `refresh_data` job; `worker-refresh-data` docker-compose service
+- `GET /api/v1/data-health/recent` endpoint
+- Alembic migration 0002: `symbol_manifest_snapshots` + `data_health_events` tables
+
 ### v0.2.0 (proposed)
 
 #### Features
