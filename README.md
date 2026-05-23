@@ -60,6 +60,36 @@ Three named profiles ship under `profiles/`:
 
 Apply one atomically: `POST /api/v1/strategy-profiles/{id}/apply`.
 
+## Data pipeline (Phase 3)
+
+Historical market data is downloaded from public exchange archives and stored
+as partitioned Parquet on local disk under `data/parquet/`. DuckDB queries them
+into Polars frames for the backtester and live feature pipeline.
+
+### One-shot manual refresh
+
+```bash
+WORKER_JOB=refresh_data just refresh-data
+```
+
+### Or via Docker (cron-style)
+
+```bash
+docker compose --profile jobs run --rm worker-refresh-data
+```
+
+### Querying
+
+```python
+from datetime import datetime
+from pathlib import Path
+
+from app.market_data.duckdb_query import DuckDBQuery
+
+q = DuckDBQuery(parquet_root=Path("data/parquet"))
+df = q.klines("binance", "BTCUSDT", datetime(2024, 1, 1), datetime(2024, 1, 31))
+```
+
 ## Layout
 
 ```
@@ -83,11 +113,10 @@ scripts/                 # Repo-level scripts (AST lint)
 docs/superpowers/        # Research + plans
 ```
 
-## What's next (out of scope for Phase 1+2)
+## What's next (out of scope for Phase 1+2+3)
 
 Future phases ship via their own plans in `docs/superpowers/plans/`:
 
-- **Phase 3** — Data pipeline (Binance Vision + Bybit + Hyperliquid archives → Parquet → DuckDB)
 - **Phase 4** — Backtester with funding accrual + survivorship-safe universe
 - **Phase 5** — Exchange adapter layer (CCXT + HL SDK) + idempotent OMS
 - **Phase 6+** — Strategy implementations (alt funding arb, cross-sectional factor portfolio)
