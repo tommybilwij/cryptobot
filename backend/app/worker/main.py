@@ -1,16 +1,45 @@
 """Worker entry point.
 
-Started via: `python -m app.worker.main` (or via docker-compose `worker` service).
+Started via: ``python -m app.worker.main`` (or via docker-compose ``worker`` service).
+
+If env var ``WORKER_JOB`` is set, dispatch to the named job in
+``app.worker.jobs.*`` and exit. Otherwise, run the heartbeat loop.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
+from collections.abc import Callable, Coroutine
+from typing import Any
+
+from app.worker.jobs import refresh_data
 
 logger = logging.getLogger(__name__)
 
 HEARTBEAT_INTERVAL_S = 30.0
+
+_JOBS: dict[str, Callable[[], Coroutine[Any, Any, None]]] = {
+    "refresh_data": refresh_data.run,
+}
+
+
+def _resolve_job(name: str) -> Callable[[], Coroutine[Any, Any, None]]:
+    """Look up a registered worker job by name.
+
+    Args:
+        name: Job identifier (matches ``WORKER_JOB`` env var).
+
+    Returns:
+        The async callable entry point for the job.
+
+    Raises:
+        KeyError: If ``name`` is not registered in ``_JOBS``.
+    """
+    if name not in _JOBS:
+        raise KeyError(f"unknown worker job: {name}")
+    return _JOBS[name]
 
 
 async def heartbeat(
@@ -42,7 +71,12 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    asyncio.run(heartbeat())
+    job_name = os.environ.get("WORKER_JOB")
+    if job_name:
+        job = _resolve_job(job_name)
+        asyncio.run(job())
+    else:
+        asyncio.run(heartbeat())
 
 
 if __name__ == "__main__":
