@@ -3,6 +3,7 @@
 Started via: `python -m app.strategy_runner.main --strategy-name funding_arb`
 (or via docker-compose `strategy-runner-*` services).
 """
+
 from __future__ import annotations
 
 import argparse

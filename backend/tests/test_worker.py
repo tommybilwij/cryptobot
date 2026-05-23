@@ -1,4 +1,5 @@
 """Tests for the worker heartbeat stub."""
+
 from __future__ import annotations
 
 import pytest

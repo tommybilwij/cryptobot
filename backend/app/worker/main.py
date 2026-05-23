@@ -2,6 +2,7 @@
 
 Started via: `python -m app.worker.main` (or via docker-compose `worker` service).
 """
+
 from __future__ import annotations
 
 import asyncio

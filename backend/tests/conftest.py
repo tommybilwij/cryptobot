@@ -1,4 +1,5 @@
 """Pytest fixtures for the cryptobot backend."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

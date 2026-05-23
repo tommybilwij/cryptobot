@@ -1,4 +1,5 @@
 """Tests for the strategy-runner heartbeat stub."""
+
 from __future__ import annotations
 
 import pytest
@@ -17,9 +18,7 @@ async def test_run_with_max_iterations(
             max_iterations=2,
         )
     assert n == 2
-    heartbeat_logs = [
-        r for r in caplog.records if "strategy-runner heartbeat" in r.message
-    ]
+    heartbeat_logs = [r for r in caplog.records if "strategy-runner heartbeat" in r.message]
     assert len(heartbeat_logs) == 2
 
 
