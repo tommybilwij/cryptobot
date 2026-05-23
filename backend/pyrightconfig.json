@@ -1,17 +1,16 @@
 {
-  "venvPath": "backend",
+  "venvPath": ".",
   "venv": ".venv",
-  "include": ["backend"],
+  "include": ["app", "tests"],
   "exclude": [
-    "**/node_modules",
-    "**/.venv",
     "**/__pycache__",
     "**/.pytest_cache",
     "**/.mypy_cache",
     "**/.ruff_cache",
-    "backend/alembic/versions"
+    ".venv",
+    "alembic/versions"
   ],
-  "extraPaths": ["backend"],
+  "extraPaths": ["."],
   "pythonVersion": "3.12",
   "pythonPlatform": "Darwin",
   "typeCheckingMode": "standard",
