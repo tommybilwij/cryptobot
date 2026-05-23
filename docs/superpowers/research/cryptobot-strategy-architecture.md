@@ -261,6 +261,110 @@ This layer is global risk hygiene; it applies whether sub-accounts isolate the s
 
 **Sub-accounts per strategy on every venue + always-on cross-strategy risk filter from the profile.** Skip the `strategy_id`-attribution OMS path until v1 is live and you've actually felt the friction. Migration from sub-accounts to single-account-with-attribution is a clean later refactor; the reverse is much harder.
 
+### Multi-strategy profile composition
+
+Multiple strategies coexist inside **one profile**, not separate ones. Strategy-specific params live under `strategies.<name>`; cross-strategy concerns live in the shared `risk.*` and `execution.*` sections. The meta-allocator is itself an entry under `strategies` that orchestrates the others.
+
+#### Schema shape
+
+```jsonc
+{
+  "meta": { "name": "balanced_v1", "version": 3 },
+
+  "strategies": {
+    "funding_arb": {
+      "enabled":          true,
+      "allocation_pct":   0.30,              // share of equity allocated to this strategy
+      "entry_bps_per_8h": 8.0,
+      "exit_bps_per_8h":  4.0,
+      "basis_halt_bps":   80.0,
+      "venues_spot":      ["binance"],
+      "venues_perp":      ["hyperliquid"],
+      "sub_account":      "strategy_a_arb"
+    },
+    "factor_portfolio": {
+      "enabled":          true,
+      "allocation_pct":   0.30,
+      "rebalance_cron":   "0 8 * * *",
+      "top_decile_pct":   0.10,
+      "shorts_enabled":   false,
+      "scoring":          { "weights": {...}, "max_scores": {...} },
+      "sub_account":      "strategy_b_pf"
+    },
+    "meta_allocator": {
+      "enabled":         true,
+      "method":          "sharpe_weighted",  // risk_parity | sharpe_weighted | static | kelly
+      "rebalance_cron":  "0 0 * * SUN",
+      "static_weights":  { "hlp": 0.40, "funding_arb": 0.30, "factor_portfolio": 0.30 },
+      "min_weight_pct":  0.10,
+      "max_weight_pct":  0.70
+    }
+  },
+
+  "risk":      { /* GLOBAL — applied across all strategies */ },
+  "execution": { /* GLOBAL — applied to all orders */ }
+}
+```
+
+#### Three knobs decide between strategies
+
+| Knob | Effect |
+|---|---|
+| `strategies.<name>.enabled` (bool) | Master on/off. `false` and the strategy doesn't run in this profile. |
+| `strategies.<name>.allocation_pct` | Direct capital share. Sum across enabled strategies ≤ 1.0; remainder is the HLP/cash bucket. |
+| `strategies.meta_allocator.method` | `sharpe_weighted` / `risk_parity` makes the per-strategy `allocation_pct` a *target* that drifts weekly based on rolling Sharpe. `static` uses the literal values. |
+
+#### Named profile compositions
+
+Same two strategy implementations, composed differently per profile:
+
+| Profile | Funding arb | Factor portfolio | Allocator | Use case |
+|---|---|---|---|---|
+| `paper_safari` | enabled, 0.01 | enabled, 0.01 | static | Testnet / dry-run sanity at tiny sizes |
+| `conservative_funding_only` | enabled, 0.30 | **disabled** | static | First weeks live; only the lower-variance strategy active |
+| `balanced_v1_small` | enabled, 0.30 | enabled, 0.05 | static | Strategy B onboarding at tiny weight |
+| `balanced_v1` | enabled, 0.30 | enabled, 0.30 | sharpe_weighted | Default once both have 30+ days live |
+| `aggressive_factor` | enabled, 0.10 | enabled, 0.50 | static | High-conviction directional regime |
+| `backtest_2024_a_only` | enabled, 0.50 | disabled | static | Isolated backtest of A on 2024 data |
+
+Switching is one atomic registry walk (Constraint #3 — leak-gap prevention). When switching `aggressive_factor` → `conservative_funding_only`, the factor portfolio's `enabled` reverts to its registry default (`false`). Disable-by-omission works correctly.
+
+#### Decision flow when both strategies are active
+
+```
+For each enabled strategy in priority order [funding_arb, factor_portfolio]:
+    action = strategy.evaluate(state, params)        # pure function
+
+    if action is BUY / SELL:
+        # Brain enforces cross-strategy risk filter (global gates)
+        if would_exceed("risk.max_gross_per_asset_pct"):    veto, log reason
+        if would_break("risk.hedge_pair_protection"):       veto, log reason
+        if would_exceed("risk.per_venue_margin_cap_pct"):   veto, log reason
+
+    if not vetoed:
+        OMS routes order to strategies.<name>.sub_account
+        Position attributed by sub-account → clean per-strategy P&L
+```
+
+Order in `strategies` matters only for veto ties. Funding arb usually wins ties because its hedge is structural (breaking it costs money); factor portfolio's directional bets are more discretionary. Configurable via `risk.veto_priority`.
+
+#### A/B comparison between profiles
+
+```
+1. Active: balanced_v1.  Profitable but max DD widening.
+2. Clone → balanced_v2_tighter_arb.  Set funding_arb.entry_bps_per_8h: 12 (was 8).
+3. Backtest both over same window via Strategy Lab A/B Compare.
+4. Side-by-side: equity curves, per-strategy contribution, max DD, Sharpe.
+5. If v2 wins on Sharpe with acceptable APR sacrifice → Apply → atomic swap.
+6. profile_id in trade_decisions changes from next tick — clean attribution cutover.
+```
+
+This flow is a property of the schema + the registry, not of any individual strategy.
+
+#### Backtest behaviour (Constraint #2)
+
+The backtester takes a `profile_id`, enumerates `enabled = true` strategies, and runs them *together* with the same shared OMS + risk filter. P&L attributed per strategy via sub-account / `strategy_id` tags. So `balanced_v1` backtest = both strategies blended; `conservative_funding_only` backtest = only A running; etc. You don't backtest A alone if B will run with it in live — same profile, same multi-strategy interaction.
+
 ### WebSocket reliability patterns
 
 | Pattern | Why |
