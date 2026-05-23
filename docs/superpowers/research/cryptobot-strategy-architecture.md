@@ -897,6 +897,244 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
 - **Is**: a synthesis of Rounds 1–5 into the recommended concrete build — file inventory, schema, interface contracts, initial registry + profile fixture, milestone gates, migration triggers.
 - **Is not**: a TDD task list with bite-sized steps and per-task tests. That belongs in `superpowers:writing-plans` → `docs/superpowers/plans/<date>-cryptobot-strategy-architecture.md`. When you're ready to start coding, invoke writing-plans and it will produce the per-task TDD plan referencing this section as its spec.
 
+## Operational primer (Round 7 — concept clarifications)
+
+The earlier rounds assume crypto-trading fluency. This section captures the foundational concepts and operational mechanics so a builder can follow the rest of the doc without external glossary work. Each subsection answers a real question that came up during planning.
+
+### Spot vs perpetual futures (the foundational distinction)
+
+Two different products on crypto exchanges. The funding-arb strategy (A) literally exists in the *gap* between them.
+
+| | **Spot** | **Perpetual futures (perps)** |
+|---|---|---|
+| What you get | The actual coin sitting in your wallet | A contract that *tracks* the coin's price |
+| Ownership | Yes — you own BTC | No — you own a position on a contract |
+| Expiry | None — it's just a coin | None — that's why it's "perpetual" |
+| Leverage | Usually 1× | Up to 20–50× (use 2–3× in practice) |
+| Short selling | Requires borrowing the coin first | Just open a short position — no borrowing |
+| Funding rate | Doesn't exist | **Pays every 1–8h between longs and shorts** |
+| Where they trade | Binance spot, Coinbase, Kraken | Hyperliquid, Binance futures, Bybit, dYdX |
+
+**Concrete example with BTC at $100,000:**
+
+```
+Spot trade:
+  Buy 0.1 BTC spot on Binance for $10,000
+  → 0.1 BTC sits in your wallet. BTC → $110k: you have $11k. BTC → $90k: you have $9k.
+
+Perp trade:
+  Open 0.1 BTC LONG perp on Hyperliquid with $1,000 collateral (10× leverage)
+  → Same P&L as 0.1 BTC. BTC → $110k: +$1,000 (100% on collateral). BTC → $90k: $0, liquidated.
+```
+
+**The funding rate** keeps perp price tethered to spot:
+
+```
+If perp price > spot price (too many longs):  longs PAY shorts every 8h (positive funding)
+If perp price < spot price (too many shorts): shorts PAY longs every 8h (negative funding)
+```
+
+**Why Strategy A needs both legs** (funding-arb mechanics):
+
+```
+Funding rate positive (longs paying shorts, e.g. +0.01% / 8h):
+  ├── BUY 0.1 BTC spot on Binance          ← long leg, owns the coin
+  └── SHORT 0.1 BTC perp on Hyperliquid    ← short leg, collects funding from longs
+
+Price moves up:    spot gains, perp short loses same amount   →  net price P&L = 0
+Price moves down:  spot loses, perp short gains same amount   →  net price P&L = 0
+Funding received every 8h:                                    →  pure profit
+```
+
+You're delta-neutral on price and earn only the funding rate. **This is why Strategy A requires Binance (spot) AND Hyperliquid (perp) — neither alone gives the edge.**
+
+Strategy B uses perps only (Hyperliquid). It's a directional bet on alt-coin momentum, not a hedge.
+
+### The HLP vault — passive for you, hyper-active for Hyperliquid
+
+**HLP = Hyperliquidity Provider vault.** You deposit USDC. The vault runs three professional strategies 24/7 on your behalf. You're a silent partner, not a trader.
+
+**What the vault actually does with your money:**
+
+1. **Market making** — quotes both buy and sell sides of the perp order book thousands of times per minute, earning the spread
+2. **Spot depth provision** — provides liquidity on Hyperliquid's spot markets
+3. **Backstop liquidator** — takes the other side of positions too big for the standard liquidation engine, earning the liquidation premium
+
+**Two perspectives on the same $4,000 deposit:**
+
+| Perspective | What's happening |
+|---|---|
+| Yours (passive) | Deposit once. Never touch. Balance grows or shrinks on its own. No clicks, no decisions. |
+| Vault's (very active) | Quoting bids/asks thousands of times per minute. Catching liquidations the moment they fire. 24/7. |
+
+**It's not a savings account** — it's closer to depositing in an (on-chain, transparent) market-making hedge fund. Your capital is *actively at risk*, and the yield comes from the trading activity itself (spread capture + maker rebates + liquidation premiums).
+
+**Returns and risk:**
+- Lifetime: ~20% APR, Sharpe 2.89, max DD <8%
+- Current (May 2026): ~10% APR (calmer market = less liquidation activity)
+- Documented tail-loss events: Dec-2024 SOL squeeze −$7M; Mar-2025 toxic liquidation −$4M; Nov-2025 POPCAT adversarial attack −$4.9M
+
+**Why we cap HLP at 40–60%, not 100%**: the tail-loss events are real. ~Once a year, something bad happens. Diversifying with the active overlay (Strategy A + Strategy B) caps single-vault concentration.
+
+**HYPE airdrop multiplier — the bonus on top:**
+
+- HYPE = Hyperliquid's native token (real market cap, traded across exchanges)
+- HLP depositors earn **3× the airdrop "points"** that a dollar sitting elsewhere on Hyperliquid earns
+- Past airdrops (notably Nov-2024) paid 5-figure USD-equivalents to active users
+- **Not guaranteed** — discretionary; protocol can change/end the multiplier at any time
+- Treat as a *free option on additional return*, not a quoted yield
+
+**Mental model:**
+
+```
+You    ──deposit── ▶  HLP vault  ──actively trades──▶  Hyperliquid order book
+                          │
+                          ▼ pro-rata
+                     Yield + losses come back to you
+```
+
+**One-line summary:** Your involvement is dormant. The capital is anything but — it's being actively traded by Hyperliquid's algorithms 24/7. That trading activity IS the source of your yield.
+
+### Exchange platforms and their roles in v1
+
+**Three active venues + one optional failover.** Not all three are used the same way.
+
+| Exchange | Role | Active buy/sell in v1? |
+|---|---|---|
+| **Hyperliquid** | HLP deposit + primary perp venue (Strategy A hedge leg + Strategy B factor positions) | Yes — heaviest activity |
+| **Binance** | Strategy A spot long leg + free historical data archive (Binance Vision) | Yes — spot only |
+| **Bybit** | Testnet during build; mainnet fallback after | Testnet yes; mainnet only when triggered |
+| Kraken | Failover spot venue (counterparty diversification) | Skip in v1; add only if needed |
+| ~~Coinbase~~ | — | Skip unless US-based |
+
+**A funding-arb trade hits two exchanges simultaneously:**
+
+```
+Funding signal triggers BUY (positive funding):
+  ├── Binance:     BUY  spot BTC      (long leg)
+  └── Hyperliquid: SHORT BTC perp     (short hedge)
+
+Exit signal:
+  ├── Binance:     SELL spot BTC
+  └── Hyperliquid: BUY  BTC perp      (close short)
+```
+
+Both fills must succeed or the hedge breaks (covered by Hedge consistency check in the risk framework).
+
+**Strategy B rebalance hits one exchange** (Hyperliquid only — directional perp positions, no hedge needed).
+
+**Practical summary**: two venues do the buy/sell work in v1 (Binance spot + Hyperliquid perps). Bybit is a third on standby for failover.
+
+### Bybit's specific role: testnet during the build → mainnet fallback after
+
+**Phase 1: weeks 1–9 (build)** — point the exchange adapter at `testnet.bybit.com` (fake-money parallel of Bybit):
+
+| | Bybit testnet | Bybit mainnet |
+|---|---|---|
+| URL | `testnet.bybit.com` | `bybit.com` |
+| Account | Separate signup + API keys | Real account, real KYC |
+| Balance | Free play money from faucet | Real USDC/USDT |
+| Order book | Synthetic, thin | Real |
+| Risk if order misbehaves | Zero | Real money loss |
+
+Use testnet to verify: order placement + cancellation, position reconciliation, WS disconnect/reconnect, deadman switch, idempotent `client_order_id` retry.
+
+**Phase 2: weeks 9+ (live)** — Bybit mainnet API key sits connected, mostly idle. Activates only when:
+
+| Condition | Bybit takes over for |
+|---|---|
+| Hyperliquid API outage / WS silent >60s | Closing affected positions |
+| HL liquidity binds on a specific alt | That pair's perp leg routes via Bybit |
+| Funding rate meaningfully better on Bybit for a pair | Strategy A's perp leg opens on Bybit |
+| HL counterparty exposure exceeds profile cap | Rebalance positions to Bybit |
+
+**Why have a fallback at all**: single-exchange dependency is a single point of failure. FTX (Nov 2022) taught everyone this. Bybit is the cheapest second venue to integrate (CCXT + AU-legal + decent perp liquidity), so we pay small integration cost for the option to fail over.
+
+In v1 normal operation, **most days Bybit mainnet does nothing.** That's not waste — it's insurance.
+
+### Paper trading: two layers, two validation goals
+
+| Layer | What | Used for | When |
+|---|---|---|---|
+| **Exchange testnet** | `testnet.bybit.com` + `app.hyperliquid-testnet.xyz` | Verify **API plumbing** (orders, reconciliation, WS) against a real exchange endpoint with fake balances | Phase 7 (week 7) |
+| **Freqtrade `dry_run` mode** | Same Freqtrade strategy code, subscribed to **live mainnet data**, fills simulated locally | Validate **strategy behaviour** against real liquidity/volatility/slippage — testnet's synthetic book lies | Phase 8 (week 8) |
+
+**The order:**
+
+```
+Week 7  ──▶  Testnet only          (paper_safari profile, fake balances on testnet)
+Week 8  ──▶  Live data, dry_run    (paper_safari profile, mainnet data, simulated fills)
+Week 9  ──▶  Live with $500        (conservative_funding_only profile, real money)
+```
+
+**Don't skip week 8.** Exchange testnets have fake liquidity — synthetic, thin order books. Fills there don't predict mainnet fills. The Freqtrade-dry-run-against-mainnet step catches the gap that testnet hides.
+
+**What you're not using:**
+- TradingView paper trading (manual only, not programmatic)
+- Hosted-bot paper modes (3Commas, Cryptohopper) — closed-source, wrong framework
+- A separate "paper trading database" — same Postgres, same tables, same code path. Only difference: the profile (`paper_safari`) + Freqtrade `dry_run` flag.
+
+This is how Constraint #2 (same code drives backtest / paper / live) cashes out: **the only difference between paper and live is a profile and a config flag, not a separate code path.**
+
+### Capital deployment across platforms ($10k worked example)
+
+Money splits across **multiple platforms AND sub-accounts within each platform** (per Round 3 strategy-isolation pattern).
+
+**Where money sits when fully deployed (balanced_v1 profile at $10k starting):**
+
+| Platform | Sub-account / wallet | Purpose | Amount |
+|---|---|---|---|
+| Hyperliquid | `hlp_deposit` | Vault — yield + HYPE airdrop | $4,000 (40%) |
+| Hyperliquid | `strategy_a_arb` | Margin for Strategy A's perp short leg | $1,000 (margin at ~2× lev = $2k notional) |
+| Hyperliquid | `strategy_b_pf` | Strategy B's factor portfolio positions | $2,000 (20%) |
+| Binance | (main / spot sub) | Strategy A's spot long leg | $2,000 |
+| Bybit | (main) | Standby — failover ready, not active | $50–100 token amount |
+| Cold storage (if capital ≥$10k) | Hardware wallet | Idle reserve | ~$900 |
+
+**Total**: ~$9,100 on exchanges + ~$900 cold = $10,000.
+
+**Why sub-accounts on the same exchange (Round 3 reminder):**
+- Strategy A's hedge and Strategy B's directional bets must not share a margin pool
+- Sub-accounts give each strategy isolated margin, positions, and funding receipts
+- Funding payments arrive in the sub-account that holds the position — no attribution math
+- All venues support this: Binance + Bybit "sub-accounts"; Hyperliquid uses separately-authorised trading wallets
+
+**Capital scales incrementally, NOT all on day 1:**
+
+| Week | Action | Cumulative on each platform |
+|---|---|---|
+| 0 | Deposit $4k into HLP | HL: $4,000 / Binance: $0 / Bybit: $0 |
+| 7–8 | Testnet + dry-run amounts | unchanged (no real money) |
+| 9 | Strategy A live, $500 total ($250 Binance + $250 HL margin) | HL: $4,250 / Binance: $250 |
+| 10–13 | Scale A to $2k as each pair proves | HL: $5k / Binance: $1k |
+| 17 | Strategy B live, $500 | HL: $5,500 / Binance: $1k |
+| 18+ | Meta-allocator ramps to full allocation | reaches table above by ~week 20 |
+
+**You only put serious money on a platform when that platform's strategy proves out live.** Avoids burning capital in a place a bug might hit before the bug is found.
+
+### Money flow (AU starting from AUD)
+
+```
+1. AUD bank account
+       │
+       ▼  (Independent Reserve or Swyftx — AU-registered, AUSTRAC compliant)
+2. AUD → USDC
+       │
+       ├──▶ Withdraw USDC to Binance     (for Strategy A spot leg)
+       │
+       └──▶ Withdraw USDC to Hyperliquid (via Arbitrum bridge)
+                  │
+                  ├──▶ HLP vault deposit
+                  ├──▶ strategy_a_arb wallet (perp margin)
+                  └──▶ strategy_b_pf wallet (factor portfolio margin)
+
+Bybit gets a $50 USDC deposit so the account is funded and failover-ready.
+```
+
+Single transfer doesn't traverse the full chain. Each leg is its own transfer. USDC then moves between sub-accounts on a given exchange as strategies rebalance.
+
+**Avoid**: PayPal, credit-card on exchanges (5%+ fees).
+
 ## Operational picks (definitive — as of 2026-05-23)
 
 Distilled from the research above. These are the v1 forced picks; per-choice rationale is in the sections above.
