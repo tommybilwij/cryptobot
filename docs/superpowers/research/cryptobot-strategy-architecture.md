@@ -7,6 +7,24 @@
 
 Architecture for a solo-dev cryptobot with $1k–$50k starting capital, ~$0–$100/mo OpEx target, running locally, on a 6–12 month horizon — maximising **realised risk-adjusted profit** (not raw APR). Excluded: market making (out of retail reach), MEV, hosted-bot platforms (closed-source, poor unit economics).
 
+## Constraints (load-bearing — carried from project CLAUDE.md)
+
+These precede every choice below. They are *not* market-driven findings but user-imposed architectural principles ported from stockbot's hard-won discipline. Violating any of them creates the bug class the system is designed to prevent.
+
+1. **No hardcoded values in strategy / risk / execution code.** Every numeric, boolean, list, enum lives in a profile JSONB blob fronted by a registry of profile-scoped keys + safe defaults. Strategies read parameters through one accessor: `params.get("strategies.funding_arb.entry_bps_per_8h")`. If a literal appears in a strategy file, that is the bug — move it to the registry.
+
+2. **Same profile drives backtest and live.** Strategy logic is a pure function `Strategy.evaluate(state, params) -> Action`. The backtester and the live engine instantiate the same `ProfileParams` from the same `profile_id` and call the same function. No "backtest defaults" parallel to "live defaults". If a knob changes in Strategy Lab, the next backtest and the live bot pick it up identically.
+
+3. **Leak-gap prevention on profile switch.** Applying a profile atomically walks the entire registry; any key absent from the new profile resets to its registry default — never inherits silently from the previous profile. Critical when toggling between conservative / aggressive named profiles in Strategy Lab.
+
+4. **UI tunability — Strategy Lab driven from the registry.** All FieldDefs in the Next.js Strategy Lab page are machine-generated (or asserted-equal) from the registry. Saving = writing JSONB; applying = atomic registry walk; cloning + diff + A/B compare backtests are first-class UI operations.
+
+5. **Decision audit per trade.** Every trade decision row stores `profile_id`, `profile_version`, and `profile_hash` (sha256 of JSONB at decision time). Six months later you must be able to reconstruct exactly which config produced any historical trade.
+
+6. **CI lints enforce 1–5.** AST lint fails any numeric literal in `backend/app/strategies/*.py`. A test asserts every `params.get(path)` call has its path in the registry, and vice versa. A test asserts every FieldDef key in the frontend has a corresponding registry default.
+
+Reference patterns to fork from: `../stockbot/backend/app/services/profile_defaults.py` (registry), `models/strategy_profile.py` (JSONB table), `api/strategy_profiles.py` (atomic apply + leak-gap prevention), `frontend/src/app/strategy-lab/page.tsx` (FieldDef → registry mapping).
+
 ## Key findings
 
 - **HLP's lifetime Sharpe is ~2.89, not 5.2.** Annualised return ~20% / vol 17.89% over lifetime. The Sharpe-5.2 figure circulated in promotional content was a cherry-picked recent 52-week window. Documented tail-loss events: $7M (Dec-2024 SOL squeeze), $4M (Mar-2025 toxic liquidation), $4.9M (Nov-2025 POPCAT adversarial attack). HLP is high-Sharpe but **has real left-tail exposure roughly once a year** — not a treasury substitute. — [Geronimo HLP analysis](https://medium.com/@RyskyGeronimo/a-risk-return-analysis-of-hyperliquids-hlp-vault-7c164cd00a0d), [The Block — HLP $4M loss](https://www.theblock.co/post/345866/hype-drop-hlp-vault-loss-hyperliquid-whale-liquidation), [Cointelegraph — POPCAT attack](https://cointelegraph.com/news/hyperliquid-hlp-popcat-attack-3m-wipeout)
@@ -48,6 +66,19 @@ This revises the earlier "50–70% HLP" recommendation downward because primary-
 ## Implementation findings (Round 2)
 
 These extend the strategic recommendation above with concrete platform, framework, data-source, and OpEx choices. The Round 1 recommendation (HLP base + active overlay, 40–60% allocation) stands; this section answers *how* to execute it.
+
+### How the load-bearing constraints shape the Round 2 stack
+
+| Constraint | Implication for the stack choice |
+|---|---|
+| No hardcoded values in strategy code | Registry + `ProfileParams` accessor sits *between* Freqtrade strategy classes and the centralised JSONB profile. Freqtrade's own per-strategy config is treated as a thin shim that reads from our registry, not as the source of truth. |
+| Same profile drives backtest + live | Freqtrade's `dry_run` mode and `backtesting` mode both load the strategy class with the same `ProfileParams` instance. We do **not** use Freqtrade's hyperopt directly — the registry is canonical; hyperopt-style sweeps run via our backtester against `profile_id` candidates. |
+| Leak-gap prevention | Profile apply is a single Postgres transaction that walks the registry; never an in-place JSONB merge. Mirrors `api/strategy_profiles.py` in stockbot. |
+| UI tunability from registry | Next.js Strategy Lab page fetches the registry + active profile from the FastAPI brain layer (not from Freqtrade). FieldDefs auto-generated from registry, with validators. A/B compare runs two backtests with two `profile_id`s. |
+| Decision audit per trade | Every Freqtrade fill is written via a callback into our Postgres `trade_decisions` table with `profile_id`/`version`/`hash` snapshot. Freqtrade's own trade log is *not* the source of truth. |
+| CI lints | AST scan over the strategy modules under `backend/app/strategies/` (the layer we control, not Freqtrade core); registry ↔ FieldDef cross-check; pre-commit hook enforces. |
+
+The bridge layer (between our central profile and Freqtrade strategy classes) is the single most important piece of infrastructure the build creates — it's what allows us to use Freqtrade's plumbing without surrendering the profile-as-source-of-truth discipline.
 
 ### Round 2 updates to Round 1 findings
 
