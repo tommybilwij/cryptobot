@@ -58,3 +58,7 @@ mig-new MESSAGE:
 # Run the API server in dev (auto-reload)
 api:
     cd backend && uv run fastapi dev app/main.py
+
+# Load profile fixtures into the DB
+load-fixtures:
+    cd backend && uv run python -m scripts.load_fixtures
