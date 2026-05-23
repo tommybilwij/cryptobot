@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.deps import get_db
@@ -29,10 +30,15 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine() -> AsyncIterator[AsyncEngine]:
-    """Session-scoped engine pointing at the test DB."""
-    engine = create_async_engine(settings.test_database_url, pool_pre_ping=True)
+    """Per-test engine pointing at the test DB.
+
+    NullPool + function scope avoids the asyncpg "Future attached to a
+    different loop" failure that arises when a session-scoped engine's pooled
+    connections outlive the pytest-asyncio per-test event loop.
+    """
+    engine = create_async_engine(settings.test_database_url, poolclass=NullPool)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
