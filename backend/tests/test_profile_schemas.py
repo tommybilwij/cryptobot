@@ -1,10 +1,16 @@
 """Tests for Pydantic schemas validating profile JSONB."""
 from __future__ import annotations
 
+import json
+import pathlib
+
 import pytest
 from pydantic import ValidationError
 
 from app.schemas.strategy_profile import StrategyProfileConfig
+
+REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
+FIXTURES_DIR = REPO_ROOT / "profiles"
 
 
 def test_minimal_valid_profile_parses() -> None:
@@ -57,3 +63,17 @@ def test_negative_leverage_rejects() -> None:
     }
     with pytest.raises(ValidationError):
         StrategyProfileConfig.model_validate(config)
+
+
+@pytest.mark.parametrize(
+    "fixture_path",
+    [
+        FIXTURES_DIR / "paper_safari.json",
+        FIXTURES_DIR / "conservative_funding_only.json",
+        FIXTURES_DIR / "balanced_v1.json",
+    ],
+)
+def test_named_fixture_validates(fixture_path: pathlib.Path) -> None:
+    with open(fixture_path) as f:
+        config = json.load(f)
+    StrategyProfileConfig.model_validate(config)

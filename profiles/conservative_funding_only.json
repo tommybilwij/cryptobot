@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "name": "conservative_funding_only",
+    "version": 1,
+    "description": "First weeks live: only Strategy A (funding arb) active. B disabled."
+  },
+  "strategies": {
+    "funding_arb": {
+      "enabled": true,
+      "allocation_pct": 0.30,
+      "entry_bps_per_8h": 10.0,
+      "exit_bps_per_8h": 5.0
+    },
+    "factor_portfolio": {
+      "enabled": false,
+      "allocation_pct": 0.0
+    },
+    "meta_allocator": {
+      "enabled": false,
+      "method": "static"
+    }
+  },
+  "risk": {
+    "max_gross_leverage": 1.0
+  }
+}
