@@ -571,6 +571,332 @@ Total still allocates 40% to HLP (Round 2 baseline); the active overlay's 60% no
 - **Live IC of B's components vs academic Sharpe.** Academic 2.62% weekly alpha ≠ your implementation's realised alpha. Need 30+ days of IC tracker data before sizing B confidently.
 - **A's current-regime Sharpe.** Round 2 noted current funding rates couldn't be retrieved via WebFetch. If May-2026 funding is compressed, A's APR may land at 5–8%, not 15–25%. Re-measure A after 30 days live.
 
+## Concrete build recommendation (Round 6 — synthesis of Rounds 1–5)
+
+This section distils the architecture into the recommended concrete v1 build — repo layout, core modules, schema, interface contracts, initial profile fixtures, and milestone gates. Implementation-level TDD steps belong in `superpowers:writing-plans` → `docs/superpowers/plans/<date>-<slug>.md`. This is the "what to build" recommendation an engineer reads before starting.
+
+### Repo structure
+
+```
+cryptobot/
+├── backend/
+│   ├── app/
+│   │   ├── api/                       # FastAPI routes (one file per resource)
+│   │   │   ├── strategy_profiles.py   # save / load / clone / apply / A-B
+│   │   │   ├── backtest.py            # run + compare
+│   │   │   ├── signals.py             # cross-sectional table for Strategy B
+│   │   │   ├── positions.py           # open positions, hedge integrity view
+│   │   │   ├── funding.py             # live funding rate monitor
+│   │   │   ├── data_health.py
+│   │   │   └── risk.py
+│   │   ├── services/                  # Business logic (forked + adapted from stockbot)
+│   │   │   ├── scoring.py
+│   │   │   ├── signal_analytics.py
+│   │   │   ├── composite_ic.py
+│   │   │   ├── regime_detector.py
+│   │   │   ├── kelly_sizer.py
+│   │   │   ├── vol_targeting.py
+│   │   │   ├── drawdown_brake.py
+│   │   │   ├── kill_switch.py
+│   │   │   ├── decision_audit.py
+│   │   │   ├── meta_allocator.py
+│   │   │   └── data_pipeline.py
+│   │   ├── strategies/                # CI-lint-protected: NO numeric literals
+│   │   │   ├── base.py                # Strategy Protocol
+│   │   │   ├── funding_arb.py
+│   │   │   └── factor_portfolio.py
+│   │   ├── profile/                   # Registry, accessor, apply mechanism
+│   │   │   ├── defaults.py            # PROFILE_SCOPED_DEFAULTS + _STRING_ + _DICT_
+│   │   │   ├── schemas.py             # Pydantic v2 models per section
+│   │   │   ├── params.py              # ProfileParams class with .get(path)
+│   │   │   └── apply.py               # atomic Postgres transaction + registry walk
+│   │   ├── exchanges/                 # Adapter layer (unified interface)
+│   │   │   ├── base.py                # ExchangeAdapter Protocol
+│   │   │   ├── binance.py             # CCXT wrapper
+│   │   │   ├── bybit.py               # CCXT wrapper
+│   │   │   └── hyperliquid.py         # HL SDK wrapper
+│   │   ├── backtest/                  # Event-driven simulator
+│   │   │   ├── engine.py
+│   │   │   ├── slippage.py
+│   │   │   ├── fees.py
+│   │   │   └── funding_accrual.py
+│   │   ├── repositories/              # DB queries (one per aggregate)
+│   │   ├── models/                    # SQLAlchemy ORM
+│   │   ├── schemas/                   # Pydantic v2 at API boundaries
+│   │   ├── worker/                    # Background jobs (APScheduler-style)
+│   │   │   ├── scheduler.py
+│   │   │   ├── data_refresh.py
+│   │   │   ├── ic_recompute.py
+│   │   │   ├── reconciliation.py
+│   │   │   └── alerts.py
+│   │   └── main.py
+│   ├── alembic/versions/
+│   ├── tests/
+│   │   ├── test_profile_registry.py   # FieldDef↔registry + params.get cross-check
+│   │   └── ...
+│   └── pyproject.toml
+├── frontend/                          # Next.js 15 (forked from stockbot)
+│   └── src/app/
+│       ├── strategy-lab/              # Save/load/clone/apply/A-B/history
+│       ├── dashboard/                 # Single-screen "am I making money + anything broken"
+│       ├── signals/                   # Cross-sectional ranked table (Strategy B)
+│       ├── positions/                 # Open positions, hedge view, PnL attribution
+│       ├── funding-monitor/           # Live funding rate grid (Strategy A's nerve centre)
+│       ├── strategies/                # Per-strategy state + rolling Sharpe/IC/DD
+│       ├── orders/                    # Recent fills + slippage analysis
+│       ├── risk/                      # Drawdown, exposure, counterparty
+│       ├── data-health/
+│       └── reports/                   # Tax / CGT export
+├── data/                              # Local Parquet store
+│   └── parquet/{exchange}/{symbol}/{type}/{yyyy}/{mm}.parquet
+├── docker-compose.yml                 # Postgres + 2× Freqtrade processes
+├── scripts/
+│   ├── lint_no_literals_in_strategies.py
+│   └── bump-version.sh                # Bootstrapped by /bump
+├── profiles/                          # Named profile JSON fixtures (committed)
+│   ├── paper_safari.json
+│   ├── conservative_funding_only.json
+│   ├── balanced_v1_small.json
+│   ├── balanced_v1.json
+│   ├── aggressive_factor.json
+│   └── backtest_2024_a_only.json
+└── docs/superpowers/
+    ├── research/cryptobot-strategy-architecture.md   ← this doc
+    └── plans/<date>-cryptobot-strategy-architecture.md  ← created later via /writing-plans
+```
+
+### Database schema (concrete table list)
+
+```sql
+-- Profile + audit
+strategy_profiles    (id, name, description, config JSONB, version, is_active, created_at, updated_at)
+trade_decisions      (id, strategy, instrument_id, ts,
+                      profile_id, profile_version, profile_hash,
+                      signal JSONB, risk_filter JSONB, sizing JSONB,
+                      action, audit JSONB)
+
+-- Reference data
+exchanges            (id, name, api_status, latency_ms, last_outage_at)
+instruments          (id, exchange_id, symbol, type, tick_size, lot_size, min_notional)
+instrument_metadata  (instrument_id, listing_date, delisting_date, sector, tags JSONB)
+symbol_manifest_snapshot (snapshot_date, exchange_id, symbols TEXT[])   -- survivorship-safe
+
+-- Market data (hot recent only; bulk in Parquet)
+market_klines        (instrument_id, ts, o, h, l, c, v)
+funding_rates        (instrument_id, ts, predicted, realized)
+open_interest        (instrument_id, ts, oi_base, oi_quote)
+
+-- Trading
+orders               (id, client_order_id UNIQUE, strategy, instrument_id, side,
+                      qty, type, status, fills JSONB, profile_id)
+positions            (id, strategy, instrument_id, qty, avg_entry, opened_at, hedge_of FK)
+trades               (id, order_id, instrument_id, qty, price, fee,
+                      exchange_time, receive_time)
+
+-- Strategy outputs
+signals_xs           (id, instrument_id, ts, total_score, component_scores JSONB,
+                      regime, percentile_rank)
+ic_history           (component, horizon, ts, ic, sample_n)
+strategy_pnl         (strategy, ts, gross, funding_pnl, fees, slippage, net)
+funding_payments     (instrument_id, ts, position_qty, rate, paid_quote, strategy)
+
+-- Tax / reporting
+tax_lots             (id, instrument_id, opened_at, qty, cost_basis_aud, closed_at, proceeds_aud)
+```
+
+### Strategy interface contract (Python)
+
+```python
+# backend/app/strategies/base.py
+
+from typing import Protocol
+from datetime import timedelta
+
+class Strategy(Protocol):
+    name: str
+
+    @classmethod
+    def required_param_paths(cls) -> set[str]:
+        """Registry paths this strategy reads. Boot fails if any missing from
+        PROFILE_SCOPED_DEFAULTS — prevents silent breakage when a strategy
+        evolves but the registry isn't updated."""
+
+    def evaluate(self, state: MarketState, params: ProfileParams) -> Action:
+        """Pure function. Same signature in backtest and live (Constraint #2).
+        Reads every parameter via params.get(path); no literals."""
+
+    def warmup_required(self, params: ProfileParams) -> timedelta:
+        """How much historical data this strategy needs before first decision.
+        Backtester respects this; live engine waits."""
+```
+
+### Initial profile registry (~40 of ~150 keys to ship in v1)
+
+```python
+# backend/app/profile/defaults.py
+
+PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
+    # ── Strategy A — funding arb ────────────────────────────────────────
+    "strategies.funding_arb.enabled":               1.0,
+    "strategies.funding_arb.allocation_pct":        0.40,
+    "strategies.funding_arb.entry_bps_per_8h":      8.0,
+    "strategies.funding_arb.exit_bps_per_8h":       4.0,
+    "strategies.funding_arb.basis_halt_bps":        80.0,
+    "strategies.funding_arb.max_position_pct":      0.10,
+    "strategies.funding_arb.hedge_drift_halt_pct":  0.05,
+    "strategies.funding_arb.spot_post_only_ttl_s":  60,
+    "strategies.funding_arb.use_predicted_funding": 1.0,
+
+    # ── Strategy B — factor portfolio ───────────────────────────────────
+    "strategies.factor_portfolio.enabled":           1.0,
+    "strategies.factor_portfolio.allocation_pct":    0.20,
+    "strategies.factor_portfolio.top_decile_pct":    0.10,
+    "strategies.factor_portfolio.bottom_decile_pct": 0.10,
+    "strategies.factor_portfolio.shorts_enabled":    0.0,
+    "strategies.factor_portfolio.lookback_minutes":  1440,
+    "strategies.factor_portfolio.cs_alpha":          0.30,
+    "strategies.factor_portfolio.scoring.thresholds.strong_buy": 10.0,
+    "strategies.factor_portfolio.scoring.thresholds.buy":         7.0,
+    # ... + per-component weights as separate keys
+
+    # ── Meta-allocator ──────────────────────────────────────────────────
+    "strategies.meta_allocator.enabled":             1.0,
+    "strategies.meta_allocator.lookback_days":       30,
+    "strategies.meta_allocator.min_weight_pct":      0.10,
+    "strategies.meta_allocator.max_weight_pct":      0.70,
+
+    # ── Risk (global, applied across all strategies) ────────────────────
+    "risk.max_gross_leverage":                       1.50,
+    "risk.max_net_leverage":                         0.50,
+    "risk.max_drawdown_pct":                         0.20,
+    "risk.daily_drawdown_halt_pct":                  0.05,
+    "risk.max_gross_per_asset_pct":                  0.15,
+    "risk.hedge_pair_protection":                    1.0,
+    "risk.deadman_timeout_s":                        60,
+    "risk.reconcile_interval_s":                     15,
+    "risk.kelly.enabled":                            0.0,
+    "risk.kelly.fraction":                           0.25,
+    "risk.vol_target.enabled":                       1.0,
+    "risk.vol_target.target_pct":                    0.015,
+    "risk.drawdown_brake.trigger_pct":               0.05,
+    "risk.drawdown_brake.full_pct":                  0.15,
+    "risk.black_swan_circuit.move_pct":              0.08,
+    "risk.black_swan_circuit.window_minutes":        5,
+
+    # ── Execution (global) ──────────────────────────────────────────────
+    "execution.max_slippage_bps":                    20,
+    "execution.taker_fallback_after_s":              60,
+    "execution.min_notional_usd":                    10,
+    "execution.max_retry_attempts":                  3,
+
+    # ── Backtest assumptions ────────────────────────────────────────────
+    "backtest.starting_capital_usd":                 10000,
+    "backtest.warmup_days":                          60,
+    "backtest.funding_accrual":                      1.0,
+    "backtest.survivorship_bias_safe":               1.0,
+}
+```
+
+### `balanced_v1` profile fixture (committed JSON)
+
+```jsonc
+// profiles/balanced_v1.json
+{
+  "meta":   { "name": "balanced_v1", "version": 1, "description": "Default after both strategies have 30+ days live" },
+  "universe": {
+    "core_pairs":           ["BTCUSDT", "ETHUSDT"],
+    "alt_universe_size":    100,
+    "min_listing_age_days": 30,
+    "min_daily_volume_usd": 5000000
+  },
+  "strategies": {
+    "funding_arb": {
+      "enabled":         true,
+      "allocation_pct":  0.40,
+      "entry_bps_per_8h": 8.0,
+      "venues_spot":     ["binance"],
+      "venues_perp":     ["hyperliquid"],
+      "sub_account":     "strategy_a_arb"
+    },
+    "factor_portfolio": {
+      "enabled":         true,
+      "allocation_pct":  0.20,
+      "rebalance_cron":  "0 8 * * *",
+      "top_decile_pct":  0.10,
+      "shorts_enabled":  false,
+      "sub_account":     "strategy_b_pf"
+    },
+    "meta_allocator": {
+      "enabled":         true,
+      "method":          "sharpe_weighted",
+      "rebalance_cron":  "0 0 * * SUN",
+      "static_weights": { "hlp": 0.40, "funding_arb": 0.40, "factor_portfolio": 0.20 }
+    }
+  },
+  "risk": {
+    "max_gross_leverage":       1.50,
+    "max_gross_per_asset_pct":  0.15,
+    "drawdown_brake":           { "trigger_pct": 0.05, "full_pct": 0.15 },
+    "black_swan_circuit":       { "move_pct": 0.08, "window_minutes": 5 }
+  },
+  "execution": { "default_order_type": "post_only_limit", "max_slippage_bps": 20 },
+  "backtest":  { "start_date": "2024-01-01", "end_date": "2026-04-30", "fee_model": "per_exchange", "funding_accrual": true }
+}
+```
+
+### Build phases — deliverables + gates
+
+| Phase | Weeks | Concrete deliverable | Definition of done (gate to advance) |
+|---|---|---|---|
+| 0 | 0 | HLP deposit (40% of capital) | Position visible in Hyperliquid UI; HYPE airdrop multiplier active |
+| 1 | 1 | Repo skeleton; CI green (PLR2004 + custom AST lint + mypy strict + pytest) | Lint passes on empty `backend/app/strategies/` |
+| 2 | 2 | Profile module: `defaults.py` + `schemas.py` + `params.py` + `apply.py` + `strategy_profiles` Postgres table | Apply A→B→A round-trip leaves zero leaked keys (test asserts this) |
+| 3 | 2 | Data pipeline: Binance Vision + Bybit public + HL archive downloaders → Parquet → DuckDB; symbol manifest snapshot cron | Plotting 2yr BTC funding rate vs price passes eyeball check; data-health report shows zero gaps |
+| 4 | 2 | Backtester core with funding accrual, per-exchange fee model, survivorship-safe universe | Replaying BTC 2024 produces realistic return distribution within ±10% of independent published numbers |
+| 5 | 1 | Exchange adapter interface (HL + Bybit + Binance via CCXT) + idempotent OMS with `client_order_id` | Place + cancel test order succeeds on each testnet |
+| 6 | 1 | Strategy `Protocol` + `funding_arb.py` skeleton; pre-commit hook for AST lint enabled | `evaluate()` runs against test market data; lint blocks a PR that injects a literal |
+| 7 | 1 | Strategy A: backtest run end-to-end + 14-day dry-run on Bybit testnet | Paper P&L tracks backtest expectation within ±20% over 14d |
+| 8 | 1 | Strategy A: dry-run against live data, no real orders | 7 days of live dry-run with zero WS disconnects / position drift |
+| 9 | 1 | Strategy A live, $500 on BTC perp + spot pair only | 14d live tracks paper P&L within ±50% (small sample → wide band acceptable) |
+| 10–13 | 4 | Strategy A: add ETH, SOL, BNB pairs incrementally; scale to $2k | Each new pair has 7d positive net P&L before advancing |
+| 14 | 1 | Strategy B scaffold + `services/scoring.py` forked from stockbot | Backtest reproduces a stockbot-style score on crypto test data |
+| 15 | 1 | Strategy B component scorers (momentum, vol_adj, OI delta, funding persistence, on-chain stub) | ≥4 components have positive IC on 18-month backtest |
+| 16 | 1 | Strategy B paper-trading alongside live A | 30d paper P&L within ±30% of backtest |
+| 17 | 1 | Strategy B live, $500 long-only top decile (sub-account `strategy_b_pf`) | First rebalance executes cleanly across all picked alts |
+| 18–19 | 2 | Meta-allocator (Sharpe-weighted between HLP + A + B) | Weekly rebalance shifts weights within profile-defined bounds |
+| 20+ | ongoing | UI build (Strategy Lab + dashboards), monitoring, capital scaling with 60d-stable triggers | 60d of stable live P&L within ±50% of backtest expectation |
+
+### Operational gates between phases (explicit go/no-go)
+
+- **Phase 1→2**: CI lint green on empty strategy dir
+- **Phase 2→3**: Profile apply round-trip preserves leak-gap; FieldDef ↔ registry test passes
+- **Phase 3→4**: Data gap report shows zero gaps on top 30 symbols × last 2 years
+- **Phase 4→5**: Backtester reproduces ≥1 published result within ±10%
+- **Phase 5→6**: Each adapter passes place / cancel / reconcile cycle on testnet
+- **Phase 6→7**: AST lint catches a deliberately-injected literal in a strategy file
+- **Phase 7→9**: Hedge drift stays <2% across 14 paper days
+- **Phase 9→13**: Funding payments arrive and are correctly attributed to A's sub-account
+- **Phase 13→17**: 30d live A has Sharpe ≥1.0 (regime-adjusted)
+- **Phase 17→18**: B's first rebalance executes with zero failed orders
+- **Phase 18→20**: Meta-allocator's first rebalance respects min/max bounds + only adjusts within explained Sharpe gap
+
+### Migration triggers (don't pre-build for scale you don't have)
+
+| Trigger | Migrate to | From |
+|---|---|---|
+| $50k+ capital + both strategies stable | NautilusTrader (single process, deterministic kernel, native multi-strategy) | 2× Freqtrade processes |
+| DuckDB query latency > 1s on common queries | ClickHouse or QuestDB | DuckDB on Parquet |
+| Live latency tail (p99) > 2s on funding-arb fills | Dedicated async WS consumer per hot pair | Shared consumer |
+| Local downtime risk unacceptable (~$20k+) | Hetzner CX22 VPS deployment | Local + Docker Compose |
+| Sub-account capacity binds | Strategy-attributed OMS in a single account | Sub-accounts per strategy |
+| On-chain IC ≥0.02 for 30+ days | Add Glassnode Standard ($39) | Free DefiLlama only |
+| 4 components in graveyard | Component review — kill or rotate weights | Leave as-is |
+
+### What this section is and is not
+
+- **Is**: a synthesis of Rounds 1–5 into the recommended concrete build — file inventory, schema, interface contracts, initial registry + profile fixture, milestone gates, migration triggers.
+- **Is not**: a TDD task list with bite-sized steps and per-task tests. That belongs in `superpowers:writing-plans` → `docs/superpowers/plans/<date>-cryptobot-strategy-architecture.md`. When you're ready to start coding, invoke writing-plans and it will produce the per-task TDD plan referencing this section as its spec.
+
 ## Operational picks (definitive — as of 2026-05-23)
 
 Distilled from the research above. These are the v1 forced picks; per-choice rationale is in the sections above.
