@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "appflowy-cloud": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/t.wijaya/Workstation/personal/project/mcp/appflowy_mcp",
+        "run",
+        "python",
+        "appflowy_mcp.py"
+      ],
+      "env": {
+        "APPFLOWY_BASE_URL": "${APPFLOWY_BASE_URL}",
+        "APPFLOWY_ACCESS_TOKEN": "${APPFLOWY_ACCESS_TOKEN}"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--user-data-dir",
+        ".playwright-data",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
+    }
+  }
+}
