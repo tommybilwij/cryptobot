@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.so
+.Python
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Build artefacts
+build/
+dist/
+*.egg
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Playwright (MCP server)
+.playwright-data/
+.playwright-mcp/
+
+# Local data store (Parquet, DuckDB)
+data/parquet/
+*.duckdb
+*.duckdb.wal
+
+# Logs
+*.log
+logs/
