@@ -4,7 +4,7 @@
 
 **Goal:** Build the foundational scaffolding (Phase 1) + the load-bearing profile system (Phase 2) for the cryptobot, per the research doc at `docs/superpowers/research/cryptobot-strategy-architecture.md`.
 
-**Architecture:** Multi-service via Docker Compose (`postgres` + `api`). Backend follows FastAPI + SQLAlchemy 2.x async + Pydantic v2 + Alembic. Profile system uses three typed registry dicts (numeric / string / dict) + Pydantic v2 schemas + Postgres JSONB storage + atomic apply transaction that walks the registry to enforce leak-gap prevention. Constraint #1 (no hardcoded values in strategies) enforced by a custom 20-line AST lint script.
+**Architecture:** Multi-service via Docker Compose — `postgres` + `api` (FastAPI CRUD) + `worker` (background-job heartbeat stub, real jobs in Phase 3+) + `strategy-runner-funding-arb` (Strategy A host, stub now) + `strategy-runner-factor-portfolio` (Strategy B host, stub now). All Python services share one Dockerfile/image. Backend follows FastAPI + SQLAlchemy 2.x async + Pydantic v2 + Alembic. Profile system uses three typed registry dicts (numeric / string / dict) + Pydantic v2 schemas + Postgres JSONB storage + atomic apply transaction that walks the registry to enforce leak-gap prevention. Constraint #1 (no hardcoded values in strategies) enforced by a custom 20-line AST lint script.
 
 **Tech Stack:** Python 3.12+, FastAPI, SQLAlchemy 2.x async + asyncpg, Pydantic v2, Alembic, pytest + pytest-asyncio, ruff, mypy `--strict`, uv (deps), Docker Compose, Postgres 16.
 
@@ -314,6 +314,525 @@ Expected: `PASSED`
 git add backend/app backend/tests
 git commit -m "feat: add FastAPI app shell with health endpoint"
 ```
+
+---
+
+### Task 3a: Backend Dockerfile (shared image for api / worker / strategy-runners)
+
+**Files:**
+- Create: `backend/Dockerfile`
+- Create: `backend/.dockerignore`
+
+- [ ] **Step 1: Create `backend/Dockerfile`**
+
+```dockerfile
+# Multi-stage Python image built with uv. Shared by api, worker,
+# strategy-runner-funding-arb, strategy-runner-factor-portfolio services.
+FROM python:3.12-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /bin/
+
+WORKDIR /app
+
+# Install deps first (cached layer when only deps change)
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
+
+# Then install the project itself
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+```
+
+- [ ] **Step 2: Create `backend/.dockerignore`**
+
+```
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.git
+.gitignore
+tests
+```
+
+- [ ] **Step 3: Build the image**
+
+```bash
+docker build -t cryptobot-backend:dev ./backend
+```
+Expected: image built, tagged `cryptobot-backend:dev`. First build downloads base + deps (~2–3 min).
+
+- [ ] **Step 4: Smoke-test image can import the app**
+
+```bash
+docker run --rm cryptobot-backend:dev python -c "from app.main import app; print('ok')"
+```
+Expected: `ok`
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/Dockerfile backend/.dockerignore
+git commit -m "chore: add shared backend Dockerfile (multi-stage uv build)"
+```
+
+---
+
+### Task 3b: Worker process stub
+
+**Files:**
+- Create: `backend/app/worker/__init__.py`
+- Create: `backend/app/worker/main.py`
+- Create: `backend/tests/test_worker.py`
+
+- [ ] **Step 1: Write the failing test**
+
+`backend/tests/test_worker.py`:
+```python
+"""Tests for the worker heartbeat stub."""
+from __future__ import annotations
+
+import pytest
+
+from app.worker.main import heartbeat
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_runs_for_max_iterations(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("INFO"):
+        n = await heartbeat(interval_s=0.0, max_iterations=3)
+    assert n == 3
+    heartbeat_logs = [r for r in caplog.records if "worker heartbeat" in r.message]
+    assert len(heartbeat_logs) == 3
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_zero_iterations() -> None:
+    n = await heartbeat(interval_s=0.0, max_iterations=0)
+    assert n == 0
+```
+
+- [ ] **Step 2: Run, verify FAILS**
+
+```bash
+cd backend && uv run pytest tests/test_worker.py -v
+```
+Expected: `ModuleNotFoundError: No module named 'app.worker'`.
+
+- [ ] **Step 3: Implement the worker stub**
+
+`backend/app/worker/__init__.py`:
+```python
+"""Worker process — background-job runner.
+
+Phase 1+2: heartbeat stub. Phase 3+ adds real jobs (data refresh, IC
+recompute, reconciliation polling, alert dispatch).
+"""
+```
+
+`backend/app/worker/main.py`:
+```python
+"""Worker entry point.
+
+Started via: `python -m app.worker.main` (or via docker-compose `worker` service).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+HEARTBEAT_INTERVAL_S = 30.0
+
+
+async def heartbeat(
+    *,
+    interval_s: float = HEARTBEAT_INTERVAL_S,
+    max_iterations: int | None = None,
+) -> int:
+    """Background heartbeat loop.
+
+    Args:
+        interval_s: Seconds between heartbeats.
+        max_iterations: Optional cap (for tests). None = infinite.
+
+    Returns:
+        Number of iterations completed.
+    """
+    iterations = 0
+    while max_iterations is None or iterations < max_iterations:
+        logger.info("worker heartbeat", extra={"iteration": iterations})
+        iterations += 1
+        if max_iterations is not None and iterations >= max_iterations:
+            break
+        await asyncio.sleep(interval_s)
+    return iterations
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    asyncio.run(heartbeat())
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 4: Run tests**
+
+```bash
+cd backend && uv run pytest tests/test_worker.py -v
+```
+Expected: 2 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/app/worker backend/tests/test_worker.py
+git commit -m "feat: worker process stub with heartbeat loop"
+```
+
+---
+
+### Task 3c: Strategy-runner process stub
+
+**Files:**
+- Create: `backend/app/strategy_runner/__init__.py`
+- Create: `backend/app/strategy_runner/main.py`
+- Create: `backend/tests/test_strategy_runner.py`
+
+- [ ] **Step 1: Write the failing test**
+
+`backend/tests/test_strategy_runner.py`:
+```python
+"""Tests for the strategy-runner heartbeat stub."""
+from __future__ import annotations
+
+import pytest
+
+from app.strategy_runner.main import run
+
+
+@pytest.mark.asyncio
+async def test_run_with_max_iterations(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("INFO"):
+        n = await run(
+            strategy_name="funding_arb",
+            interval_s=0.0,
+            max_iterations=2,
+        )
+    assert n == 2
+    heartbeat_logs = [
+        r for r in caplog.records if "strategy-runner heartbeat" in r.message
+    ]
+    assert len(heartbeat_logs) == 2
+
+
+@pytest.mark.asyncio
+async def test_run_logs_strategy_name(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO"):
+        await run(
+            strategy_name="factor_portfolio",
+            interval_s=0.0,
+            max_iterations=1,
+        )
+    record = [r for r in caplog.records if "strategy-runner heartbeat" in r.message][0]
+    assert record.strategy == "factor_portfolio"
+```
+
+- [ ] **Step 2: Run, verify FAILS**
+
+```bash
+cd backend && uv run pytest tests/test_strategy_runner.py -v
+```
+Expected: `ModuleNotFoundError: No module named 'app.strategy_runner'`.
+
+- [ ] **Step 3: Implement the strategy-runner stub**
+
+`backend/app/strategy_runner/__init__.py`:
+```python
+"""Per-strategy runner process.
+
+Phase 1+2: heartbeat stub. In Phase 6+ this hosts a Strategy Protocol
+implementation. The Freqtrade-vs-own-asyncio-loop decision is deferred
+to Phase 6 when the bridge-layer design is locked in; the container
+boundary itself exists from day 1.
+"""
+```
+
+`backend/app/strategy_runner/main.py`:
+```python
+"""Strategy-runner entry point.
+
+Started via: `python -m app.strategy_runner.main --strategy-name funding_arb`
+(or via docker-compose `strategy-runner-*` services).
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+HEARTBEAT_INTERVAL_S = 30.0
+
+
+async def run(
+    *,
+    strategy_name: str,
+    interval_s: float = HEARTBEAT_INTERVAL_S,
+    max_iterations: int | None = None,
+) -> int:
+    """Per-strategy heartbeat loop.
+
+    Args:
+        strategy_name: identifier (e.g. 'funding_arb', 'factor_portfolio').
+        interval_s: Seconds between heartbeats.
+        max_iterations: Optional cap (for tests). None = infinite.
+
+    Returns:
+        Number of iterations completed.
+    """
+    iterations = 0
+    while max_iterations is None or iterations < max_iterations:
+        logger.info(
+            "strategy-runner heartbeat",
+            extra={"strategy": strategy_name, "iteration": iterations},
+        )
+        iterations += 1
+        if max_iterations is not None and iterations >= max_iterations:
+            break
+        await asyncio.sleep(interval_s)
+    return iterations
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--strategy-name", required=True)
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    asyncio.run(run(strategy_name=args.strategy_name))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 4: Run tests**
+
+```bash
+cd backend && uv run pytest tests/test_strategy_runner.py -v
+```
+Expected: 2 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/app/strategy_runner backend/tests/test_strategy_runner.py
+git commit -m "feat: strategy-runner process stub (--strategy-name arg)"
+```
+
+---
+
+### Task 3d: Extend docker-compose with api + worker + strategy-runners
+
+**Files:**
+- Modify: `docker-compose.yml`
+
+- [ ] **Step 1: Replace contents of `docker-compose.yml`**
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cryptobot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cryptobot
+      POSTGRES_USER: cryptobot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cryptobot -d cryptobot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-api
+    restart: unless-stopped
+    command: uv run fastapi run app/main.py --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-worker
+    restart: unless-stopped
+    command: uv run python -m app.worker.main
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  strategy-runner-funding-arb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-strategy-runner-funding-arb
+    restart: unless-stopped
+    command: uv run python -m app.strategy_runner.main --strategy-name funding_arb
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  strategy-runner-factor-portfolio:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-strategy-runner-factor-portfolio
+    restart: unless-stopped
+    command: uv run python -m app.strategy_runner.main --strategy-name factor_portfolio
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+```
+
+- [ ] **Step 2: Add a `up-all` recipe to the justfile**
+
+Append to `justfile`:
+```just
+# Bring up ALL services (postgres + api + worker + strategy runners)
+up-all:
+    docker compose up -d --build
+    @echo "Waiting for postgres..."
+    @until docker compose exec postgres pg_isready -U cryptobot -d cryptobot > /dev/null 2>&1; do sleep 1; done
+    @echo "All services started. Run 'docker compose ps' to see status."
+
+# Tail logs from all services
+logs *args:
+    docker compose logs -f "$@"
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docker-compose.yml justfile
+git commit -m "chore: docker-compose with api + worker + 2x strategy-runner services"
+```
+
+---
+
+### Task 3e: Multi-service smoke test (manual)
+
+**Files:** none modified — verification step.
+
+- [ ] **Step 1: Bring up all services**
+
+```bash
+just up-all
+```
+Expected: postgres + api + worker + strategy-runner-funding-arb + strategy-runner-factor-portfolio all built and started.
+
+- [ ] **Step 2: List service status**
+
+```bash
+docker compose ps
+```
+Expected: 5 services listed, all `Up` / `running`. postgres reports `(healthy)`. Others are `Up X seconds`.
+
+- [ ] **Step 3: Smoke health endpoint**
+
+```bash
+curl -s http://localhost:8000/api/v1/health
+```
+Expected: `{"status":"ok"}`
+
+- [ ] **Step 4: Check worker heartbeat is logging**
+
+```bash
+docker compose logs --tail=5 worker
+```
+Expected: at least one `worker heartbeat` line.
+
+- [ ] **Step 5: Check strategy-runner heartbeats are logging**
+
+```bash
+docker compose logs --tail=5 strategy-runner-funding-arb
+docker compose logs --tail=5 strategy-runner-factor-portfolio
+```
+Expected: each shows at least one `strategy-runner heartbeat` line with its own strategy name in the extra fields.
+
+- [ ] **Step 6: Tear down**
+
+```bash
+just down
+```
+Expected: all 5 containers stopped + removed.
+
+- [ ] **Step 7: Commit (only if any docs / scripts changed during smoke test)**
+
+If you fixed anything (e.g. typo in docker-compose), commit it:
+```bash
+git status
+# resolve any uncommitted fixes
+git add <files> && git commit -m "fix: <what>"
+```
+
+If nothing changed, skip this step.
 
 ---
 
@@ -3218,7 +3737,7 @@ It will analyse the commits, classify them, bump VERSION if applicable (likely P
 | ~40 initial registry keys (Round 6) | Task 12 |
 | balanced_v1 fixture (Round 6) | Task 20 |
 | Strategy Protocol | Task 22 |
-| Multi-service Docker Compose | Task 2 (postgres + api), worker / strategy / frontend in later plans per scope |
+| Multi-service Docker Compose | Tasks 2 + 3a + 3b + 3c + 3d + 3e (postgres + api + worker + 2× strategy-runner). Frontend deferred to its own Phase 8 plan. |
 
 **2. Placeholder scan:** scanned for "TODO", "implement later", "similar to Task N", "TBD", "fill in" — none present in committed plan content.
 
@@ -3249,7 +3768,7 @@ Plan complete and saved to `docs/superpowers/plans/2026-05-23-cryptobot-strategy
 
 **Two execution options:**
 
-**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration. Best for a plan this size (28 tasks).
+**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration. Best for a plan this size (33 tasks: 28 numbered + 5 lettered 3a–3e).
 
 **2. Inline Execution** — Execute tasks in this session using `superpowers:executing-plans`. Batch execution with checkpoints for review.
 
