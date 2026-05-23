@@ -1,0 +1,105 @@
+{
+  "env": {
+    "FORCE_COLOR": "0",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(gh pr *)",
+      "Bash(gh issue *)",
+      "Bash(gh auth status)",
+      "Bash(direnv allow *)",
+      "Bash(docker compose ps *)",
+      "Bash(docker compose config *)",
+      "Bash(docker compose logs *)",
+      "Bash(docker port *)",
+      "Bash(lsof -iTCP -sTCP:LISTEN)",
+      "Read(./**)",
+      "Read(/tmp/**)"
+    ]
+  },
+  "model": "claude-opus-4-7",
+  "enabledMcpjsonServers": [
+    "context7",
+    "playwright"
+  ],
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash -c 'exec \"$(ls -1 ~/.claude/plugins/cache/dev-toolkit/dev-toolkit-core/*/bin/dt-statusline 2>/dev/null | sort -V | tail -1)\"'"
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "echo \"agent: ${CLAUDE_AGENT_NAME:-?} model: ${CLAUDE_MODEL:-?}\""
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v dt-branch-hygiene >/dev/null 2>&1 && dt-branch-hygiene || git status -sb 2>/dev/null | head -1"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "branch=$(git branch --show-current 2>/dev/null); dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); [ -n \"$branch\" ] && echo \"[branch=$branch dirty=$dirty]\" || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'exec \"$(ls -1 ~/.claude/plugins/cache/dev-toolkit/dev-toolkit-core/*/bin/dt-stop-notify 2>/dev/null | sort -V | tail -1)\"'"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [],
+    "PreToolUse": []
+  }
+}

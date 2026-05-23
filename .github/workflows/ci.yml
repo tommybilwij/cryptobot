@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Placeholder workflow: keeps the two required status checks (`typecheck`,
+# `test`) reporting success while the repo has no application code. Replace
+# the no-op step bodies with real commands (mypy/tsc, pytest/vitest, etc.)
+# once a stack is committed. Job names must stay `typecheck` and `test` to
+# satisfy the main-branch ruleset without ruleset edits.
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "placeholder — no code to typecheck yet"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "placeholder — no code to test yet"
