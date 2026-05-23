@@ -246,6 +246,126 @@ Process boundaries are chosen for **crash isolation**, not performance. One Freq
 - Pre-aggregated 1-min klines alongside raw trades — avoid re-aggregating on every backtest
 - Bulk inserts batched (1 s or 1k rows, whichever first) — never one-row-per-insert
 
+## Operational picks (definitive — as of 2026-05-23)
+
+Distilled from the research above. These are the v1 forced picks; per-choice rationale is in the sections above.
+
+### Trading platforms
+
+| Role | Pick | One-line reason |
+|---|---|---|
+| Passive yield engine | **Hyperliquid HLP vault** | ~10% current APY + 3x HYPE airdrop, lifetime Sharpe 2.89 |
+| Primary perp venue (overlay) | **Hyperliquid** | Cheapest fees, on-chain transparent, no KYC |
+| Spot leg (arb hedge) + free historical data | **Binance** | Deepest spot liquidity; USDC-M perps at 0.04%/0.00%; Binance Vision = free gold-standard data |
+| Backup perp venue | **Bybit** | AU-legal, single-criterion VIP |
+| Skip | Coinbase (US-only fees), all hosted bots (3Commas et al.) | |
+
+### Tech stack
+
+| Layer | Pick |
+|---|---|
+| Language | Python 3.12+ |
+| Backend | FastAPI + SQLAlchemy 2.x async + Pydantic v2 + Alembic |
+| Frontend | Next.js 15 + React + Tailwind + Zustand + TanStack Query |
+| Trading framework (v1) | **Freqtrade** (one process per strategy) |
+| Trading framework (re-evaluate at $50k+) | NautilusTrader |
+| Dataframe | **Polars** (not pandas) |
+| Analytics | **DuckDB** on partitioned Parquet |
+| State DB | **Postgres** (Supabase free tier or local Docker) |
+| Concurrency | `asyncio` within each process, no threads |
+| Types | `mypy --strict` + Pydantic v2 at API boundaries |
+| Secrets | `sops` or Doppler (not `.env` committed) |
+| Monitoring | Grafana free + Telegram bot alerts |
+| Deployment | Local + Docker Compose (v1) → Hetzner CX22 ($6/mo) at $20k+ capital |
+
+### Data sources (tiered)
+
+| Tier | Items | Cost/mo | When |
+|---|---|---|---|
+| Free essentials | Binance Vision + Bybit public + HL archive + DefiLlama + CoinGecko free (50/min) + Token Unlocks free + Binance REST public | **$0** | Day 1 |
+| LLM overlay | Anthropic Claude API for narrative / conviction overlay | $20–80 | Phase 1 (funding arb live) |
+| On-chain (pay-when-IC-proves-it) | Glassnode Standard | $39 | Only after on-chain IC ≥0.02 for 30+ live days |
+| Skip in v1 | Tardis ($200–400), Nansen ($150), Glassnode API ($700), Twitter/X ($100+) | — | |
+
+### Year-1 OpEx envelope
+
+| Phase | $/month |
+|---|---|
+| Phase 0 (build only) | $0–10 |
+| Phase 1 (funding arb live) | $20–90 |
+| Phase 2 (factor portfolio + Glassnode) | $60–130 |
+| Phase 3 (VPS, backups, scaling) | $70–140 |
+
+**Year-1 total: $300–$1,500.** Single largest line: Anthropic API for LLM overlay; everything else combined is under $50/mo.
+
+## Accounts to create
+
+Sign up in order, per phase. Don't bulk-create — match each account to the phase that needs it.
+
+### Phase 0 (this week — build setup)
+
+| # | Account | URL | Purpose | KYC | Cost |
+|---|---|---|---|---|---|
+| 1 | **Hyperliquid** | app.hyperliquid.xyz | HLP deposit + perp trading + testnet | **None** (on-chain, non-custodial — sign with a wallet) | $0 |
+| 2 | **Binance** | binance.com | Free historical data (no key) + spot trading | Full KYC | $0 |
+| 3 | **Bybit** | bybit.com | Backup perp venue + testnet for plumbing tests | Full KYC | $0 |
+| 4 | **Anthropic API** | console.anthropic.com | Claude API for LLM overlay (narrative classification, conviction) | Email + payment | $0 to start, $20–80/mo when active |
+| 5 | **Hardware wallet** (conditional) | ledger.com — Nano S Plus | Cold storage for idle balance + HYPE airdrop receipt | None | $79–149 one-off |
+
+**Hyperliquid setup specifics:**
+
+- Create a **separate trading wallet** (not your main wallet) — Hyperliquid lets you authorise a trading wallet scoped to HL only; limits blast radius if that key leaks
+- Deposit USDC via the **Arbitrum bridge** (cheapest route in 2026)
+- For HLP: vaults page → HLP → deposit (note: **4-day lockup** from last deposit before withdrawal)
+
+**Exchange API key hygiene (Binance + Bybit):**
+
+- One key per strategy (so you can rotate independently)
+- **Disable withdrawal** on every key — non-negotiable
+- IP-whitelist your dev machine + VPS once you have one
+- Rotate quarterly or after any incident
+
+**Hardware wallet — conditional, not mandatory at day 1:**
+
+| Capital | Hardware wallet? |
+|---|---|
+| Under $2k | Skip. Software wallet (MetaMask) is sufficient. |
+| $2k–$10k | Nice-to-have. Defer until scaling capital. |
+| **$10k+** | **Yes. Buy before depositing meaningful capital.** Ledger Nano S Plus ($79) from `ledger.com` (not Amazon — supply-chain attacks have happened). |
+| $50k+ | Mandatory. Don't run the bot without one. |
+
+### Phase 1 (when starting live code)
+
+| Account | URL | Purpose | Cost |
+|---|---|---|---|
+| Sentry | sentry.io | Error monitoring (free tier 5k events/mo) | $0 |
+| Telegram bot | message `@BotFather` on Telegram | Fill / halt / daily P&L alerts | $0 |
+| Token Unlocks (free) | tokenunlocks.app | Token unlock calendar — input for factor portfolio | $0 |
+| Supabase (optional) | supabase.com | Hosted Postgres free tier (skip if local Docker Postgres is fine) | $0 or $25 |
+
+### Phase 2+ (only when triggered)
+
+| Account | Trigger |
+|---|---|
+| Glassnode Standard | On-chain component IC ≥0.02 for 30+ live days |
+| CryptoQuant Standard | Alternative if Glassnode component doesn't prove out |
+| Hetzner CX22 ($6/mo) | When local downtime risk becomes unacceptable (~$20k+ capital) |
+| Backblaze B2 | Offsite Postgres backups ($0.005/GB/mo) |
+
+### Skip — do not sign up in v1
+
+- **3Commas / Cryptohopper / Pionex / Coinrule / Bitsgap** — closed-source hosted bots; not building one
+- **Tardis.dev** ($200–400/mo) — only needed for market making, out of scope
+- **Nansen Lite** ($150/mo) — revisit only if smart-money flow proves edge in factor portfolio
+- **CoinGecko Pro** — free tier (50 calls/min) is sufficient at our cadence
+- **Twitter/X API** ($100+/mo) — terrible signal-to-noise; explicitly recommended against
+- **Glassnode API tier** ($700/mo) / **CryptoQuant API** ($800/mo) — institutional pricing wasted at retail scale
+- **Coinbase** — unless US-based; higher fees, shallower liquidity
+
+### Fiat funding (AU-specific)
+
+For AUD → USDC: **Independent Reserve** or **Swyftx** (AU-registered, AUSTRAC-compliant, faster than Binance Australia for AUD on-ramp). Once on the CEX, bridge USDC to Hyperliquid via Arbitrum. Avoid PayPal and credit-card on exchanges (5%+ fees).
+
 ## Sources
 
 - [DefiLlama — Hyperliquid HLP TVL/fees](https://defillama.com/protocol/hyperliquid-hlp) — primary-source fee yield, TVL
