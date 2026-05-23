@@ -8,21 +8,52 @@ on:
 permissions:
   contents: read
 
-# Placeholder workflow: keeps the two required status checks (`typecheck`,
-# `test`) reporting success while the repo has no application code. Replace
-# the no-op step bodies with real commands (mypy/tsc, pytest/vitest, etc.)
-# once a stack is committed. Job names must stay `typecheck` and `test` to
-# satisfy the main-branch ruleset without ruleset edits.
-
 jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo "placeholder — no code to typecheck yet"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: cd backend && uv python install
+      - name: Install dependencies
+        run: cd backend && uv sync --frozen
+      - name: Run mypy --strict
+        run: cd backend && uv run mypy app
+      - name: Run ruff
+        run: cd backend && uv run ruff check app tests
+      - name: AST lint strategies
+        run: python3 scripts/lint_no_literals_in_strategies.py
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cryptobot_test
+          POSTGRES_USER: cryptobot
+          POSTGRES_PASSWORD: devpass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cryptobot -d cryptobot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://cryptobot:devpass@localhost:5432/cryptobot_test
+      DATABASE_URL: postgresql+asyncpg://cryptobot:devpass@localhost:5432/cryptobot_test
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:devpass@localhost:5432/cryptobot_test
     steps:
       - uses: actions/checkout@v4
-      - run: echo "placeholder — no code to test yet"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: cd backend && uv python install
+      - name: Install dependencies
+        run: cd backend && uv sync --frozen
+      - name: Run Alembic migrations
+        run: cd backend && uv run alembic upgrade head
+      - name: Run pytest
+        run: cd backend && uv run pytest -v
