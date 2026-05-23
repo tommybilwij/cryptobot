@@ -47,6 +47,22 @@ services:
       postgres:
         condition: service_healthy
 
+  worker-refresh-data:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-worker-refresh-data
+    restart: "no"   # cron-like; orchestrator (cron + docker compose run) drives cadence
+    command: uv run python -m app.worker.main
+    environment:
+      WORKER_JOB: refresh_data
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["jobs"]   # not started by default; `docker compose --profile jobs run worker-refresh-data`
+
   strategy-runner-funding-arb:
     build:
       context: ./backend

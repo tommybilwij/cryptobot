@@ -62,3 +62,7 @@ api:
 # Load profile fixtures into the DB
 load-fixtures:
     cd backend && uv run python -m scripts.load_fixtures
+
+# Run the refresh_data worker job once (uses the WORKER_JOB env)
+refresh-data:
+    cd backend && WORKER_JOB=refresh_data uv run python -m app.worker.main
