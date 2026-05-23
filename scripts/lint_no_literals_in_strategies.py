@@ -15,7 +15,7 @@ import ast
 import pathlib
 import sys
 
-ALLOWED: set[int | float] = {0, 1, -1}
+ALLOWED: set[int | float] = {0, 1, -1, 0.0, 1.0, -1.0}
 SCAN_DIR = pathlib.Path(__file__).parent.parent / "backend" / "app" / "strategies"
 
 
