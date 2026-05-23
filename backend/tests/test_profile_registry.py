@@ -1,12 +1,18 @@
 """Tests for profile registry self-consistency."""
 from __future__ import annotations
 
+import ast
+import pathlib
+
 from app.profile.defaults import (
     PROFILE_SCOPED_DEFAULTS,
     PROFILE_SCOPED_DICT_DEFAULTS,
     PROFILE_SCOPED_STRING_DEFAULTS,
     all_profile_keys,
 )
+
+REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
+STRATEGIES_DIR = REPO_ROOT / "backend" / "app" / "strategies"
 
 
 def test_no_key_appears_in_more_than_one_registry() -> None:
@@ -55,4 +61,33 @@ def test_dotted_paths_are_valid_identifiers() -> None:
         for segment in key.split("."):
             assert segment.isidentifier(), (
                 f"non-identifier segment {segment!r} in path {key!r}"
+            )
+
+
+def _collect_params_get_paths(py_file: pathlib.Path) -> list[str]:
+    """Return every string passed to a `.get(...)` method call in py_file."""
+    tree = ast.parse(py_file.read_text())
+    paths: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            paths.append(node.args[0].value)
+    return paths
+
+
+def test_every_params_get_path_is_in_registry() -> None:
+    """If a strategy calls `params.get('foo.bar')`, 'foo.bar' must be registered."""
+    registered = all_profile_keys()
+    for py_file in STRATEGIES_DIR.rglob("*.py"):
+        if py_file.name == "base.py":
+            continue
+        for path in _collect_params_get_paths(py_file):
+            assert path in registered, (
+                f"{py_file}: params.get({path!r}) but path not in registry"
             )
