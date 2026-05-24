@@ -18,13 +18,14 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from app.backtest.state import MarketState
+from app.backtest.state import MarketSnapshot, MarketState
 from app.exchanges.base import Exchange
 from app.oms.exceptions import KillSwitchActive
 from app.oms.service import OMS
 from app.profile.params import ProfileParams
 from app.risk.drawdown_brake import DrawdownBrake
 from app.risk.exceptions import DrawdownBrakeHalt
+from app.risk.vol_estimator import RollingVolEstimator
 from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
 from app.services.live_state_fetcher import LiveStateFetcher
@@ -33,6 +34,12 @@ from app.services.runner_state import RunnerStateService
 logger = logging.getLogger(__name__)
 
 _MS_PER_SECOND = 1000
+# Rolling window length for the realized-vol estimator. Lives here (not in the
+# profile registry) because it's a fixed unit-of-measure constant — 30 bars of
+# 1m closes is the minimum the strategy needs to produce a usable annualised
+# stdev. Tunable per-strategy parameters still live in the profile.
+_VOL_ESTIMATOR_WINDOW_BARS = 30
+_SPOT_PRODUCT = "spot"
 
 _STATUS_DISABLED = "disabled"
 _STATUS_NO_ORDERS = "no_orders"
@@ -97,6 +104,10 @@ class LiveRunner:
         # Peak persisted to runner_state; tracked so we only write when it
         # strictly ratchets up (one row per new high-water mark).
         self._persisted_peak: float = self._brake.peak
+        # HP7: per-runner rolling-vol estimator. Strategies read the resulting
+        # ``realized_vols`` map off ``MarketSnapshot``; the estimator itself
+        # stays internal so callers can't accidentally seed it from outside.
+        self._vol_estimator = RollingVolEstimator(window_bars=_VOL_ESTIMATOR_WINDOW_BARS)
 
     def stop(self) -> None:
         """Signal the loop to exit after the current tick finishes."""
@@ -128,6 +139,7 @@ class LiveRunner:
         if not bool(self._params.get("live.enabled")):
             return {"status": _STATUS_DISABLED}
         state = await self._fetcher.fetch_market_state(symbols=self._symbols)
+        state = self._hydrate_realized_vols(state)
         orders = self._strategy.evaluate(state, self._params)
         result_status = _STATUS_NO_ORDERS
         if orders:
@@ -203,6 +215,40 @@ class LiveRunner:
             except Exception:  # noqa: BLE001
                 logger.exception("tick failed; continuing")
             await asyncio.sleep(interval)
+
+    def _hydrate_realized_vols(self, state: MarketState) -> MarketState:
+        """Record spot bar closes into the estimator and inject realized vols.
+
+        Returns a new ``MarketState`` whose snapshot carries the latest
+        ``realized_vols`` map keyed by ``(venue, symbol)``. Perp bars are
+        skipped — vol is measured on the spot leg to stay consistent with
+        the backtest pipeline (which uses spot history from Parquet).
+
+        Symbols whose estimator window is still too short to compute a
+        sample variance yield 0.0; strategies fall back to a placeholder
+        in that case (see ``RollingVolEstimator.annualised_vol``).
+        """
+        seen: set[tuple[str, str]] = set()
+        for (venue, symbol, product), bar in state.snapshot.bars.items():
+            if product != _SPOT_PRODUCT:
+                continue
+            self._vol_estimator.record(venue=venue, symbol=symbol, close_px=bar.close)
+            seen.add((venue, symbol))
+        realized_vols: dict[tuple[str, str], float] = {
+            (venue, symbol): self._vol_estimator.annualised_vol(venue=venue, symbol=symbol)
+            for (venue, symbol) in seen
+        }
+        new_snapshot = MarketSnapshot(
+            ts_ms=state.snapshot.ts_ms,
+            bars=state.snapshot.bars,
+            funding_rates=state.snapshot.funding_rates,
+            realized_vols=realized_vols,
+        )
+        return MarketState(
+            snapshot=new_snapshot,
+            positions=state.positions,
+            cash_quote=state.cash_quote,
+        )
 
     def _mark_to_market(self, state: MarketState) -> float:
         total = 0.0

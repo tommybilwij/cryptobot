@@ -30,3 +30,18 @@ def test_keys_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     s = Settings(_env_file=None)
     assert s.binance_api_key == "test-key"
     assert s.binance_api_secret == "test-secret"
+
+
+def test_db_pool_defaults() -> None:
+    s = Settings(_env_file=None)
+    assert s.db_pool_size == 5
+    assert s.db_max_overflow == 10
+    assert s.db_pool_timeout == 30.0
+
+
+def test_db_pool_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DB_POOL_SIZE", "20")
+    monkeypatch.setenv("DB_MAX_OVERFLOW", "40")
+    s = Settings(_env_file=None)
+    assert s.db_pool_size == 20
+    assert s.db_max_overflow == 40

@@ -319,6 +319,47 @@ async def test_runner_hydrates_peak_from_state(db_session: AsyncSession) -> None
 
 
 @pytest.mark.asyncio
+async def test_runner_populates_realized_vols(db_session: AsyncSession) -> None:
+    """After multiple ticks, snapshot.realized_vols has a >0 entry for the traded symbol.
+
+    HP7: the runner owns a ``RollingVolEstimator`` and must record each tick's
+    spot close + inject the resulting per-symbol annualised vol into the
+    snapshot the strategy sees. Five ticks at oscillating prices is enough to
+    produce a non-zero sample stdev (window is 30 bars, but the estimator
+    starts emitting at >= 3 closes).
+    """
+    profile = await _make_profile(db_session)
+    params = ProfileParams(profile={"live": {"enabled": True}})
+    captured: dict[str, dict[tuple[str, str], float]] = {}
+
+    class _CapturingStrategy:
+        name = "capture"
+
+        def evaluate(self, state: MarketState, params: ProfileParams) -> list[Order]:
+            del params
+            captured["last"] = dict(state.snapshot.realized_vols)
+            return []
+
+    strategy = _CapturingStrategy()
+    runner, paper, _ = _build_runner(
+        db_session=db_session,
+        params=params,
+        strategy=strategy,  # type: ignore[arg-type]
+        profile=profile,
+    )
+
+    # Five distinct closes => four log-returns => non-degenerate sample stdev.
+    for px in (60_000.0, 60_500.0, 60_200.0, 60_800.0, 60_400.0):
+        paper.set_mark_price("BTCUSDT", "spot", px)
+        paper.set_mark_price("BTCUSDT", "perp", px)
+        await runner.run_one_tick()
+
+    realized = captured["last"]
+    assert ("binance", "BTCUSDT") in realized
+    assert realized[("binance", "BTCUSDT")] > 0.0
+
+
+@pytest.mark.asyncio
 async def test_runner_persists_new_peak(db_session: AsyncSession) -> None:
     """Tick that ratchets the peak writes back to ``runner_state.peak_equity``."""
     profile = await _make_profile(db_session)

@@ -19,6 +19,8 @@ from app.backtest.state import Product
 from app.models.backtest_run import BacktestRun
 from app.models.strategy_profile import StrategyProfile
 from app.profile.params import ProfileParams
+from app.services.feature_pipeline import FeaturePipeline
+from app.services.universe_loader import UniverseLoader
 
 
 class BacktestService:
@@ -53,6 +55,24 @@ class BacktestService:
                     run.strategy_name,
                     venue=run.venue,
                     symbols=list(run.symbols),
+                )
+            elif run.strategy_name == "factor_portfolio":
+                # HP7: load survivorship-safe universe + wire the real
+                # FeaturePipeline. Falls back to the request's symbols when
+                # no manifest snapshot exists for the run's start date.
+                loader = UniverseLoader(self._session)
+                universe = await loader.for_date(
+                    snapshot_date=run.start_ts.date(),
+                    exchange=run.venue,
+                )
+                if not universe:
+                    universe = list(run.symbols)
+                pipeline = FeaturePipeline(parquet_root=self._parquet_root, params=params)
+                strategy = self._registry.build(
+                    run.strategy_name,
+                    venue=run.venue,
+                    universe=universe,
+                    feature_pipeline=pipeline,
                 )
             else:
                 symbol = run.symbols[0]
