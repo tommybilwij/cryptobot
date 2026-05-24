@@ -219,6 +219,54 @@ curl -X POST http://localhost:8000/api/v1/backtests -H "Content-Type: applicatio
 - **Cross-venue best-execution routing** → Phase 9+
 - **Multi-symbol portfolios** → Phase 13+
 
+## Testnet integration (Phase 7)
+
+REST adapters are now production-shaped: `fetch_positions`, `fetch_order`, and `fetch_funding_rate` all hit real endpoints. Hyperliquid signs via EIP-712 typed-data. `LiveStateFetcher` builds a `MarketState` from any `Exchange` adapter — the live analogue of `BacktestLoader`.
+
+### Required env vars
+
+```bash
+# Binance Spot Testnet + Futures Testnet keys
+export BINANCE_API_KEY=...
+export BINANCE_API_SECRET=...
+
+# Bybit V5 testnet keys (api-testnet.bybit.com)
+export BYBIT_API_KEY=...
+export BYBIT_API_SECRET=...
+
+# Hyperliquid testnet wallet (EVM private key; testnet at app.hyperliquid-testnet.xyz)
+export HYPERLIQUID_WALLET_PRIVATE_KEY=0x...
+```
+
+### Health check
+
+```bash
+curl http://localhost:8000/api/v1/exchanges/health
+```
+
+Returns per-venue reachability + balance via PaperExchange. Real-adapter swap-in lands in Phase 8.
+
+### Testnet smoke tests
+
+```bash
+# Deselected by default; opt in with -m slow + env keys
+cd backend && uv run pytest -m slow tests/integration/test_binance_testnet_smoke.py -v
+cd backend && uv run pytest -m slow tests/integration/test_bybit_testnet_smoke.py -v
+cd backend && uv run pytest -m slow tests/integration/test_hyperliquid_testnet_smoke.py -v
+
+# Hyperliquid order-placement calibration (opt-in within opt-in)
+HYPERLIQUID_SMOKE_PLACE_ORDER=1 cd backend && uv run pytest -m slow tests/integration/test_hyperliquid_testnet_smoke.py::test_hyperliquid_testnet_place_tiny_order_calibrates_signing -v
+```
+
+Each smoke test skips cleanly when the relevant env keys are missing. HL signing uses a Phase 7 JSON-stable EIP-712 connection-id formula; if HL testnet rejects the signature, calibrate against the actual docs scheme (msgpack-encoded action + keccak) — verified via the order-placement smoke.
+
+### Deferred to Phase 8+
+
+- Live runner loop (continuous strategy → OMS → exchange) → Phase 8
+- Real-adapter wiring in `/health` endpoint (currently PaperExchange) → Phase 8
+- WebSocket fills → Phase 9+
+- Mainnet → Phase 9
+
 ## Layout
 
 ```
