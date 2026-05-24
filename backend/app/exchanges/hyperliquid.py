@@ -3,26 +3,24 @@
 Hyperliquid is an L1 with a centralised order book API. Auth is via EVM-style
 signing: each action is signed with the user's EVM private key.
 
-Phase 7 ships EIP-712 typed-data signing (``encode_typed_data`` against the HL
-``Agent`` struct with chainId 1337 — HL's signature chain) and removes the
-Phase 5 ``personal_sign`` stub. The exact ``connectionId`` formula in HL's
-docs uses keccak over msgpack-encoded action + nonce + vault; we ship a
-JSON-stable SHA256 approximation here so the wire envelope shape (``{"r","s","v"}``)
-is correct, and rely on the slow-marker testnet smoke test to confirm real
-HL acceptance. If testnet rejects, calibrate the ``connectionId`` formula
-against the published docs.
+Signing follows HL's published EIP-712 ``Agent`` envelope (chainId 1337 —
+HL's signature chain, distinct from ETH mainnet). The ``connectionId`` is
+the keccak256 of ``msgpack(action) + nonce_bytes + vault_byte`` per
+https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/signing.
+HP1 (Hardening Pass 1) replaced the prior JSON-stable SHA256 approximation
+with the documented msgpack formula so testnet/mainnet accept the signature.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import time
 from typing import Any, Literal, cast
 
 import httpx
+import msgpack  # type: ignore[import-untyped]
 from eth_account import Account
 from eth_account.messages import encode_typed_data
+from eth_utils.crypto import keccak
 
 from app.backtest.orders import Order
 from app.backtest.state import Product
@@ -46,7 +44,10 @@ _DEFAULT_TIMEOUT_S = 10.0
 _SIG_CHAIN_ID = 1337
 _FUNDING_LOOKBACK_HOURS = 24
 _SECONDS_PER_HOUR = 3600
-_SIG_HEX_R_END = 64
+# Nonce is encoded as 8-byte big-endian in the connectionId preimage.
+_NONCE_BYTES = 8
+# An EVM signature is 65 bytes => 130 hex chars: r (32B / 64 hex) | s (32B / 64 hex) | v (1B / 2 hex).
+_R_S_HEX_LEN = 64
 _SIG_HEX_S_END = 128
 _SIG_HEX_V_END = 130
 _HEX_BASE = 16
@@ -86,13 +87,24 @@ class HyperliquidExchange:
         """Sign an HL L1 action under the documented EIP-712 ``Agent`` scheme.
 
         HL signs an ``Agent`` struct ``{source: string, connectionId: bytes32}``
-        under chainId 1337 (HL's signature chain — distinct from ETH mainnet).
-        The canonical ``connectionId`` is keccak over msgpack(action) + nonce +
-        vault; this Phase 7 implementation uses a JSON-stable SHA256 stand-in
-        so the wire envelope is the right shape. The slow-marker testnet
-        smoke test confirms HL acceptance — if it rejects, calibrate the
-        ``connectionId`` formula here against the published docs.
+        under chainId 1337. The ``connectionId`` is::
+
+            keccak256(msgpack(action) + nonce_bytes(8B big-endian) + vault_byte)
+
+        ``vault_byte`` is ``0x00`` when no vault address is attached (the
+        common case for an EOA-owned account). Reference:
+        https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/signing
         """
+        # 1. msgpack the action (canonical wire form HL hashes against).
+        action_bytes: bytes = msgpack.packb(action, use_bin_type=True)
+        # 2. Nonce as 8-byte big-endian.
+        nonce_bytes = nonce_ms.to_bytes(_NONCE_BYTES, byteorder="big")
+        # 3. Vault byte: 0x00 for "no vault address attached".
+        vault_byte = b"\x00"
+        # 4. connectionId is keccak256 of the concatenation.
+        connection_id_bytes = keccak(action_bytes + nonce_bytes + vault_byte)
+
+        # 5. EIP-712 typed-data envelope.
         domain = {
             "name": "Exchange",
             "version": "1",
@@ -105,18 +117,13 @@ class HyperliquidExchange:
                 {"name": "connectionId", "type": "bytes32"},
             ],
         }
-        action_json = json.dumps(action, separators=(",", ":"), sort_keys=True)
-        connection_id_hex = hashlib.sha256(f"{action_json}{nonce_ms}".encode()).hexdigest()
-        message = {
-            "source": "a",
-            "connectionId": bytes.fromhex(connection_id_hex),
-        }
+        message = {"source": "a", "connectionId": connection_id_bytes}
         signable = encode_typed_data(domain_data=domain, message_types=types, message_data=message)
         signed = self._account.sign_message(signable)
         sig_hex = cast("str", signed.signature.hex())
         return {
-            "r": "0x" + sig_hex[:_SIG_HEX_R_END],
-            "s": "0x" + sig_hex[_SIG_HEX_R_END:_SIG_HEX_S_END],
+            "r": "0x" + sig_hex[:_R_S_HEX_LEN],
+            "s": "0x" + sig_hex[_R_S_HEX_LEN:_SIG_HEX_S_END],
             "v": int(sig_hex[_SIG_HEX_S_END:_SIG_HEX_V_END], _HEX_BASE),
         }
 

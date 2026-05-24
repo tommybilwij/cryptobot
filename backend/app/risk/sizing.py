@@ -50,6 +50,7 @@ class SizingService:
         peak_equity: float,
         current_equity: float,
         max_notional_cap: float,
+        intervals_per_year: float | None = None,
     ) -> float:
         """Return the target USDC notional for the spot leg.
 
@@ -63,13 +64,23 @@ class SizingService:
             current_equity: Live mark-to-market equity.
             max_notional_cap: Hard cap from the strategy registry — the
                 returned value is min'd against this.
+            intervals_per_year: Optional override for the annualisation
+                factor. Strategy A passes the per-venue value
+                (``exchanges.{venue}.funding_intervals_per_year``) so HL's
+                hourly funding doesn't get sized under Binance's 8h cadence.
+                When omitted, falls back to the legacy
+                ``strategies.funding_arb.intervals_per_year`` for backward
+                compatibility.
 
         Returns:
             Target notional in quote currency. Zero when funding is
             non-positive, vol is degenerate, or the drawdown brake at full
             halt collapses the multiplier all the way down to ``min_mult``.
         """
-        intervals_per_year = float(self._params.get("strategies.funding_arb.intervals_per_year"))
+        if intervals_per_year is None:
+            intervals_per_year = float(
+                self._params.get("strategies.funding_arb.intervals_per_year")
+            )
         baseline_cap = float(self._params.get("risk.kelly.baseline_cap"))
         kelly_fraction = float(self._params.get("risk.kelly.fraction"))
         vol_target = float(self._params.get("risk.vol_target.target_pct"))

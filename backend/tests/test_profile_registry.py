@@ -306,3 +306,12 @@ def test_scoring_component_keys_present() -> None:
     for comp in ("momentum_30d", "funding_yield", "realized_vol", "volume_rank"):
         assert f"strategies.factor_portfolio.scoring.{comp}.max_score" in PROFILE_SCOPED_DEFAULTS
         assert f"strategies.factor_portfolio.scoring.{comp}.weight" in PROFILE_SCOPED_DEFAULTS
+
+
+def test_per_venue_funding_intervals_present() -> None:
+    """HP1: each venue carries its own funding cadence (HL hourly, BN/Bybit 8h)."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["exchanges.binance.funding_intervals_per_year"] == 1095.75
+    assert PROFILE_SCOPED_DEFAULTS["exchanges.bybit.funding_intervals_per_year"] == 1095.75
+    assert PROFILE_SCOPED_DEFAULTS["exchanges.hyperliquid.funding_intervals_per_year"] == 8766.0

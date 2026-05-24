@@ -119,11 +119,16 @@ class FactorPortfolioStrategy:
         Phase 15 simplification: only ``funding_yield`` is wired to real data.
         Other components default to 0.0 — Phase 16+ adds proper pipelines
         (rolling realized vol, cross-sectional volume rank, momentum_30d).
+
+        HP1: funding annualisation uses the per-venue cadence
+        (``exchanges.{venue}.funding_intervals_per_year``) so HL's hourly
+        funding doesn't get scaled under Binance's 8h assumption.
         """
         features: dict[str, float] = {}
         funding = state.snapshot.funding_rates.get((self._venue, symbol))
         if funding is not None:
-            intervals_per_year = float(params.get("strategies.funding_arb.intervals_per_year"))
+            intervals_per_year_key = f"exchanges.{self._venue}.funding_intervals_per_year"
+            intervals_per_year = float(params.get(intervals_per_year_key))
             features["funding_yield"] = funding * intervals_per_year
         return features
 

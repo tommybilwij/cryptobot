@@ -34,6 +34,11 @@ class MarketSnapshot:
     # backtest loader and live feed populate this field when funding data
     # is available for the current bar timestamp.
     funding_rates: dict[tuple[str, str], float] = field(default_factory=dict)
+    # Per-tick annualised realized volatility keyed by (venue, symbol).
+    # Populated by the live runner / backtest loader from a rolling vol
+    # estimator (see app.risk.vol_estimator). Strategies fall back to a
+    # placeholder when the key is absent (cold start, missing history).
+    realized_vols: dict[tuple[str, str], float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

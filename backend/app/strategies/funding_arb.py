@@ -22,7 +22,10 @@ from app.profile.params import ProfileParams
 from app.risk.sizing import SizingService
 
 _BPS_DIVISOR = 10_000.0
-# Phase 10 placeholder vol; Phase 11+ wires a real rolling stdev estimator.
+# Fallback vol used only when the live estimator hasn't yet seeded enough
+# closes for ``(venue, symbol)`` — see app.risk.vol_estimator. Once the
+# runner / backtest loader populates ``snapshot.realized_vols``, the
+# strategy reads from there instead of this placeholder.
 _PHASE_10_VOL_PLACEHOLDER = 0.6
 
 
@@ -43,9 +46,28 @@ class FundingArbStrategy:
         funding = state.snapshot.funding_rates.get((self._venue, symbol))
         if funding is None:
             return []
+        # Basis-blowout halt — if the spot/perp price gap is wider than
+        # ``strategies.funding_arb.basis_halt_bps``, skip this symbol entirely
+        # this tick (no new entries, no exits — let it cool off). This guards
+        # against the textbook "funding looks great but the hedge is broken"
+        # blow-up mode where one leg has lagged or de-pegged.
+        if self._basis_halt_active(state, params, symbol):
+            return []
         funding_bps_per_8h = funding * _BPS_DIVISOR
         spot_pos, perp_pos = self._find_position(state.positions, symbol)
         return self._decide(funding_bps_per_8h, spot_pos, perp_pos, state, params, symbol)
+
+    def _basis_halt_active(
+        self, state: MarketState, params: ProfileParams, symbol: str
+    ) -> bool:
+        """Return True when |perp - spot| / spot exceeds the basis-halt threshold."""
+        spot_bar = state.snapshot.bars.get((self._venue, symbol, "spot"))
+        perp_bar = state.snapshot.bars.get((self._venue, symbol, "perp"))
+        if spot_bar is None or perp_bar is None or spot_bar.close <= 0.0:
+            return False
+        basis_bps = abs(perp_bar.close - spot_bar.close) / spot_bar.close * _BPS_DIVISOR
+        halt_threshold = float(params.get("strategies.funding_arb.basis_halt_bps"))
+        return basis_bps > halt_threshold
 
     def _decide(
         self,
@@ -127,20 +149,30 @@ class FundingArbStrategy:
         # at least one symbol).
         cash_per_symbol = state.cash_quote / len(self._symbols)
         if kelly_enabled:
-            # Kelly + vol target + drawdown ramp. Phase 10: vol is a stub; the
-            # real estimator lands in Phase 11. Equity-without-MTM (cash_quote)
-            # is a deliberate simplification for the opt-in path — the live
-            # runner has the MTM, but the engine doesn't yet expose it here.
+            # Kelly + vol target + drawdown ramp. Realized vol now comes from
+            # the snapshot (populated by the rolling estimator on the runner
+            # side); the placeholder is only used on cold start before the
+            # window has been seeded. Per-venue funding cadence is sourced
+            # from ``exchanges.{venue}.funding_intervals_per_year`` so HL's
+            # hourly funding is annualised correctly. Equity-without-MTM
+            # (cash_quote) is a deliberate simplification — the live runner
+            # has the MTM but the engine doesn't yet expose it here.
             sizer = SizingService(params=params)
             funding_rate = state.snapshot.funding_rates.get((self._venue, symbol), 0.0)
+            realized_vol = state.snapshot.realized_vols.get(
+                (self._venue, symbol), _PHASE_10_VOL_PLACEHOLDER
+            )
             peak_equity = float(params.get("risk.drawdown_brake.peak_equity"))
+            intervals_per_year_key = f"exchanges.{self._venue}.funding_intervals_per_year"
+            intervals_per_year = float(params.get(intervals_per_year_key))
             target = sizer.compute_notional(
                 funding_rate_per_interval=funding_rate,
-                realized_vol=_PHASE_10_VOL_PLACEHOLDER,
+                realized_vol=realized_vol,
                 cash_quote=cash_per_symbol,
                 peak_equity=peak_equity,
                 current_equity=cash_per_symbol,
                 max_notional_cap=max_notional,
+                intervals_per_year=intervals_per_year,
             )
         else:
             target = min(max_notional, cash_per_symbol * cash_frac)
