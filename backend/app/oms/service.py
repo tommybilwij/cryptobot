@@ -45,7 +45,9 @@ from app.oms.kill_switch import KillSwitch
 from app.oms.ledger import MultiVenueCashLedger
 from app.oms.reconciler import PositionReconciler
 from app.profile.params import ProfileParams
+from app.services import correlation
 from app.services.decision_audit import DecisionAuditService
+from app.services.metrics_collector import collector as _metrics
 
 _MS_PER_SECOND = 1000
 _TERMINAL_STATUSES: frozenset[str] = frozenset(
@@ -102,8 +104,13 @@ class OMS:
         profile_version: int,
         profile_hash: str,
     ) -> DispatchResult:
+        # Correlation ID — tags every log line + audit row in this dispatch's
+        # async scope (contextvar propagates through `await`).
+        correlation.set_dispatch_id(correlation.new_id())
+        start_ms = time.time() * _MS_PER_SECOND
         ts = datetime.now(UTC)
         input_state = _serialize_state(state)
+        input_state["dispatch_id"] = correlation.current()
         order_dicts = [_serialize_order(o) for o in orders]
 
         # 1. Kill switch check (before any exchange contact).
@@ -120,6 +127,11 @@ class OMS:
                 reconciliation_status=_STATUS_KILL_SWITCH,
                 reason="kill switch active",
             )
+            _metrics.record_dispatch(
+                latency_ms=time.time() * _MS_PER_SECOND - start_ms,
+                status=_STATUS_KILL_SWITCH,
+            )
+            _metrics.record_halt("KillSwitchActive")
             raise KillSwitchActive(f"kill switch active; audit_entry_id={entry.id}")
 
         # 2. Validate each order's venue is configured.
@@ -136,6 +148,10 @@ class OMS:
                     fills=[],
                     reconciliation_status=_STATUS_UNCONFIGURED_VENUE,
                     reason=f"venue {order.venue} not configured",
+                )
+                _metrics.record_dispatch(
+                    latency_ms=time.time() * _MS_PER_SECOND - start_ms,
+                    status=_STATUS_UNCONFIGURED_VENUE,
                 )
                 raise UnconfiguredVenueError(
                     f"{order.venue} not in configured exchanges; audit_entry_id={entry.id}"
@@ -162,6 +178,13 @@ class OMS:
                 reconciliation_status=_STATUS_AUTH_FAILED,
                 reason=str(e),
             )
+            # Attribute the auth failure to the venue we were placing against
+            # — `orders` is validated non-empty in step 2 by this point.
+            _metrics.record_venue_error(orders[0].venue)
+            _metrics.record_dispatch(
+                latency_ms=time.time() * _MS_PER_SECOND - start_ms,
+                status=_STATUS_AUTH_FAILED,
+            )
             raise OMSError(f"auth failed during dispatch; audit_entry_id={entry.id}") from e
 
         # 4. Reconcile. Runs unconditionally — empty-orders dispatch still
@@ -187,11 +210,18 @@ class OMS:
             reason=reason,
         )
 
+        _metrics.record_dispatch(
+            latency_ms=time.time() * _MS_PER_SECOND - start_ms,
+            status=reconciliation_status,
+        )
+
         if reconciliation_status == _STATUS_HALTED_HEDGE_DRIFT:
             assert reason is not None
+            _metrics.record_halt("HedgeDriftHalt")
             raise HedgeDriftHalt(reason)
         if reconciliation_status == _STATUS_HALTED_BOOK_DRIFT:
             assert reason is not None
+            _metrics.record_halt("ReconciliationDriftHalt")
             raise ReconciliationDriftHalt(reason)
 
         return DispatchResult(
@@ -285,6 +315,7 @@ class OMS:
                         fee_quote=status.fee_quote,
                     )
                 )
+                _metrics.record_fill(partial=(status.status == "partially_filled"))
                 remaining_qty -= status.filled_qty_base
                 if status.status == "filled" or remaining_qty < min_remainder:
                     break
