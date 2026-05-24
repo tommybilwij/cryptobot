@@ -1,5 +1,14 @@
 # Changelog
 
+### v0.13.0 (2026-05-24)
+
+#### Features
+- Per-strategy sub-account API keys for venue isolation. `Settings` gains 7 optional `_funding_arb` / `_factor_pf` suffixed fields (`binance_api_key_funding_arb`, `binance_api_secret_funding_arb`, `binance_api_key_factor_pf`, `binance_api_secret_factor_pf`, `bybit_api_key_funding_arb`, `bybit_api_secret_funding_arb`, `hyperliquid_wallet_private_key_funding_arb`)
+- `exchange_factory.build_exchange()` accepts a new `sub_account: str | None` kwarg; helper `_resolve_key()` returns the strategy-specific key when populated, falls back to the base field otherwise. Sub-account string is normalized (dashes → underscores) so profile values like `strategy-a-arb` map cleanly to field names
+- `live_trade` worker reads `strategies.funding_arb.sub_account` from the registry and threads it through to every venue adapter — same profile, same sub-account routing for backtest and live (Constraint #2)
+- 2 new tests in `test_exchange_factory.py`: `test_factory_uses_sub_account_keys_when_present`, `test_factory_falls_back_to_base_keys_when_sub_empty`. 255 prior + 2 new = 257 tests pass
+- Wiring pattern extends trivially to Bybit and Hyperliquid by the same `_resolve_key` lookup; only Binance is exercised by tests in this phase
+
 ### v0.12.0 (2026-05-24)
 
 #### Features
