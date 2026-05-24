@@ -4,6 +4,12 @@ Delta-neutral long-spot + short-perp when 8h funding is above the entry
 threshold; close the hedge when funding decays below the exit threshold.
 
 All thresholds + sizing live in the profile registry (Constraint #1).
+
+Phase 12: the strategy now operates over a list of symbols. Each tick loops
+over the configured ``symbols`` and emits orders per symbol. Cash is split
+evenly across the configured symbols when sizing a new hedge (so a 2-symbol
+profile with $1000 cash sizes each leg from $500). Single-element list
+behavior is identical to the pre-Phase-12 single-symbol mode.
 """
 
 from __future__ import annotations
@@ -23,17 +29,27 @@ _PHASE_10_VOL_PLACEHOLDER = 0.6
 class FundingArbStrategy:
     name = "funding_arb"
 
-    def __init__(self, *, venue: str, symbol: str) -> None:
+    def __init__(self, *, venue: str, symbols: list[str]) -> None:
         self._venue = venue
-        self._symbol = symbol
+        self._symbols = symbols
 
     def evaluate(self, state: MarketState, params: ProfileParams) -> list[Order]:
-        funding = state.snapshot.funding_rates.get((self._venue, self._symbol))
+        all_orders: list[Order] = []
+        for symbol in self._symbols:
+            all_orders.extend(self._evaluate_one(state, params, symbol))
+        return all_orders
+
+    def _evaluate_one(
+        self, state: MarketState, params: ProfileParams, symbol: str
+    ) -> list[Order]:
+        funding = state.snapshot.funding_rates.get((self._venue, symbol))
         if funding is None:
             return []
         funding_bps_per_8h = funding * _BPS_DIVISOR
-        spot_pos, perp_pos = self._find_position(state.positions)
-        return self._decide(funding_bps_per_8h, spot_pos, perp_pos, state, params)
+        spot_pos, perp_pos = self._find_position(state.positions, symbol)
+        return self._decide(
+            funding_bps_per_8h, spot_pos, perp_pos, state, params, symbol
+        )
 
     def _decide(
         self,
@@ -42,13 +58,14 @@ class FundingArbStrategy:
         perp_pos: Position | None,
         state: MarketState,
         params: ProfileParams,
+        symbol: str,
     ) -> list[Order]:
         # Flat → maybe enter
         if spot_pos is None and perp_pos is None:
             entry = float(params.get("strategies.funding_arb.entry_bps_per_8h"))
             if funding_bps_per_8h < entry:
                 return []
-            return self._open_hedge(state, params)
+            return self._open_hedge(state, params, symbol)
 
         # Hedged → maybe exit
         if spot_pos is not None and perp_pos is not None:
@@ -57,14 +74,14 @@ class FundingArbStrategy:
             )
             if funding_bps_per_8h > exit_threshold:
                 return []
-            return self._close_hedge(spot_pos, perp_pos)
+            return self._close_hedge(spot_pos, perp_pos, symbol)
 
         # Orphan spot → close spot
         if spot_pos is not None:
             return [
                 Order(
                     venue=self._venue,
-                    symbol=self._symbol,
+                    symbol=symbol,
                     product="spot",
                     side="sell",
                     qty_base=abs(spot_pos.qty_base),
@@ -80,7 +97,7 @@ class FundingArbStrategy:
         return [
             Order(
                 venue=self._venue,
-                symbol=self._symbol,
+                symbol=symbol,
                 product="perp",
                 side=side,
                 qty_base=abs(perp_pos.qty_base),
@@ -89,12 +106,12 @@ class FundingArbStrategy:
         ]
 
     def _find_position(
-        self, positions: tuple[Position, ...]
+        self, positions: tuple[Position, ...], symbol: str
     ) -> tuple[Position | None, Position | None]:
         spot: Position | None = None
         perp: Position | None = None
         for p in positions:
-            if (p.venue, p.symbol) != (self._venue, self._symbol):
+            if (p.venue, p.symbol) != (self._venue, symbol):
                 continue
             if p.product == "spot":
                 spot = p
@@ -103,10 +120,10 @@ class FundingArbStrategy:
         return spot, perp
 
     def _open_hedge(
-        self, state: MarketState, params: ProfileParams
+        self, state: MarketState, params: ProfileParams, symbol: str
     ) -> list[Order]:
-        spot_bar = state.snapshot.bars.get((self._venue, self._symbol, "spot"))
-        perp_bar = state.snapshot.bars.get((self._venue, self._symbol, "perp"))
+        spot_bar = state.snapshot.bars.get((self._venue, symbol, "spot"))
+        perp_bar = state.snapshot.bars.get((self._venue, symbol, "perp"))
         if spot_bar is None or perp_bar is None:
             return []
         if spot_bar.close <= 0.0:
@@ -114,6 +131,11 @@ class FundingArbStrategy:
         max_notional = float(params.get("strategies.funding_arb.max_notional_usdc"))
         cash_frac = float(params.get("strategies.funding_arb.max_cash_fraction"))
         kelly_enabled = float(params.get("risk.kelly.enabled")) > 0.0
+        # Phase 12: split cash evenly across configured symbols so a 2-symbol
+        # profile doesn't double-allocate the same balance. ``self._symbols``
+        # is constructed in __init__ and is never empty (registry guarantees
+        # at least one symbol).
+        cash_per_symbol = state.cash_quote / len(self._symbols)
         if kelly_enabled:
             # Kelly + vol target + drawdown ramp. Phase 10: vol is a stub; the
             # real estimator lands in Phase 11. Equity-without-MTM (cash_quote)
@@ -121,26 +143,26 @@ class FundingArbStrategy:
             # runner has the MTM, but the engine doesn't yet expose it here.
             sizer = SizingService(params=params)
             funding_rate = state.snapshot.funding_rates.get(
-                (self._venue, self._symbol), 0.0
+                (self._venue, symbol), 0.0
             )
             peak_equity = float(params.get("risk.drawdown_brake.peak_equity"))
             target = sizer.compute_notional(
                 funding_rate_per_interval=funding_rate,
                 realized_vol=_PHASE_10_VOL_PLACEHOLDER,
-                cash_quote=state.cash_quote,
+                cash_quote=cash_per_symbol,
                 peak_equity=peak_equity,
-                current_equity=state.cash_quote,
+                current_equity=cash_per_symbol,
                 max_notional_cap=max_notional,
             )
         else:
-            target = min(max_notional, state.cash_quote * cash_frac)
+            target = min(max_notional, cash_per_symbol * cash_frac)
         if target <= 0.0:
             return []
         qty = target / spot_bar.close
         return [
             Order(
                 venue=self._venue,
-                symbol=self._symbol,
+                symbol=symbol,
                 product="spot",
                 side="buy",
                 qty_base=qty,
@@ -148,7 +170,7 @@ class FundingArbStrategy:
             ),
             Order(
                 venue=self._venue,
-                symbol=self._symbol,
+                symbol=symbol,
                 product="perp",
                 side="sell",
                 qty_base=qty,
@@ -157,12 +179,12 @@ class FundingArbStrategy:
         ]
 
     def _close_hedge(
-        self, spot_pos: Position, perp_pos: Position
+        self, spot_pos: Position, perp_pos: Position, symbol: str
     ) -> list[Order]:
         return [
             Order(
                 venue=self._venue,
-                symbol=self._symbol,
+                symbol=symbol,
                 product="spot",
                 side="sell",
                 qty_base=abs(spot_pos.qty_base),
@@ -170,7 +192,7 @@ class FundingArbStrategy:
             ),
             Order(
                 venue=self._venue,
-                symbol=self._symbol,
+                symbol=symbol,
                 product="perp",
                 side="buy",
                 qty_base=abs(perp_pos.qty_base),

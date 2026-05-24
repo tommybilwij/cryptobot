@@ -40,7 +40,7 @@ def test_funding_arb_engine_e2e_on_synthetic_data(tmp_path: Path) -> None:
     store.write_funding("binance", "BTCUSDT", funding_df, year=2024, month=1)
 
     loader = BacktestLoader(parquet_root=tmp_path)
-    strategy = FundingArbStrategy(venue="binance", symbol="BTCUSDT")
+    strategy = FundingArbStrategy(venue="binance", symbols=["BTCUSDT"])
     params = ProfileParams(profile={})
     engine = Engine(loader=loader, strategy=strategy, params=params)
     start = datetime(2024, 1, 1, tzinfo=UTC)

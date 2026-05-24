@@ -86,7 +86,10 @@ async def run() -> None:
                 for v in _VENUES
             }
             alerter = Alerter(params=params, fetcher=fetcher)
-            strategy = FundingArbStrategy(venue=venue, symbol=symbol)
+            # Phase 12: FundingArbStrategy now takes a list of symbols.
+            # Future phase will read ``strategies.funding_arb.symbols`` from
+            # the registry; for now we wrap the existing default key.
+            strategy = FundingArbStrategy(venue=venue, symbols=[symbol])
             oms = OMS(
                 exchanges=exchanges,
                 audit_service=DecisionAuditService(session),

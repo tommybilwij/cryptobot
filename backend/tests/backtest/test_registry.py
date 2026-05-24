@@ -35,5 +35,5 @@ def test_names_returns_registered_strategies() -> None:
 
 def test_resolve_funding_arb() -> None:
     reg = StrategyRegistry.default()
-    s = reg.build("funding_arb", venue="binance", symbol="BTCUSDT")
+    s = reg.build("funding_arb", venue="binance", symbols=["BTCUSDT"])
     assert s.name == "funding_arb"
