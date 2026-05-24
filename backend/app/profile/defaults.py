@@ -84,6 +84,15 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "execution.max_retry_attempts": 3,
     "execution.retry_backoff_ms": 500,
 
+    # ── Execution (fees + slippage; used by backtest fill sim + live OMS)
+    "execution.slippage_bps.binance": 5.0,
+    "execution.slippage_bps.bybit": 5.0,
+    "execution.slippage_bps.hyperliquid": 8.0,
+    "execution.fee_bps.binance.spot": 10.0,
+    "execution.fee_bps.binance.perp": 4.0,
+    "execution.fee_bps.bybit.perp": 5.5,
+    "execution.fee_bps.hyperliquid.perp": 3.5,
+
     # ── Backtest assumptions ────────────────────────────────────────────
     "backtest.starting_capital_usd": 10000,
     "backtest.warmup_days": 60,
@@ -91,6 +100,11 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "backtest.survivorship_bias_safe": 1.0,
     "backtest.use_predicted_funding_in_bt": 1.0,
     "backtest.constant_slippage_bps": 3,
+
+    # ── Backtest harness ─────────────────────────────────────────────────
+    "backtest.initial_cash_quote_usdc": 10_000.0,
+    "backtest.bar_interval_s": 60,
+    "metrics.minutes_per_year": 525_600,
 
     # ── Data health ─────────────────────────────────────────────────────
     "data_health.max_age_s.trades": 60,

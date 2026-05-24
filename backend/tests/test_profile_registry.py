@@ -91,3 +91,34 @@ def test_every_params_get_path_is_in_registry() -> None:
             assert path in registered, (
                 f"{py_file}: params.get({path!r}) but path not in registry"
             )
+
+
+def test_execution_slippage_keys_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    for venue in ("binance", "bybit", "hyperliquid"):
+        key = f"execution.slippage_bps.{venue}"
+        assert key in PROFILE_SCOPED_DEFAULTS, f"missing {key}"
+        assert isinstance(PROFILE_SCOPED_DEFAULTS[key], float)
+
+
+def test_execution_fee_keys_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    expected = [
+        "execution.fee_bps.binance.spot",
+        "execution.fee_bps.binance.perp",
+        "execution.fee_bps.bybit.perp",
+        "execution.fee_bps.hyperliquid.perp",
+    ]
+    for key in expected:
+        assert key in PROFILE_SCOPED_DEFAULTS, f"missing {key}"
+        assert isinstance(PROFILE_SCOPED_DEFAULTS[key], float)
+
+
+def test_backtest_keys_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["backtest.initial_cash_quote_usdc"] == 10_000.0
+    assert PROFILE_SCOPED_DEFAULTS["backtest.bar_interval_s"] == 60
+    assert PROFILE_SCOPED_DEFAULTS["metrics.minutes_per_year"] == 525_600
