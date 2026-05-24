@@ -82,6 +82,24 @@ services:
         condition: service_healthy
     profiles: ["jobs"]
 
+  worker-live-trade:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-worker-live-trade
+    restart: "unless-stopped"
+    command: uv run python -m app.worker.main
+    environment:
+      WORKER_JOB: live_trade
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["live"]
+
   strategy-runner-funding-arb:
     build:
       context: ./backend

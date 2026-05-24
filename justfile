@@ -70,3 +70,7 @@ refresh-data:
 # Run a single backtest by id (uses WORKER_JOB=run_backtest)
 backtest BACKTEST_ID:
     cd backend && WORKER_JOB=run_backtest BACKTEST_ID={{BACKTEST_ID}} uv run python -m app.worker.main
+
+# Start the live runner loop (uses WORKER_JOB=live_trade); dry-run by default
+live-trade:
+    cd backend && WORKER_JOB=live_trade uv run python -m app.worker.main

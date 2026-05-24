@@ -14,7 +14,7 @@ import os
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from app.worker.jobs import refresh_data, run_backtest
+from app.worker.jobs import live_trade, refresh_data, run_backtest
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ HEARTBEAT_INTERVAL_S = 30.0
 _JOBS: dict[str, Callable[[], Coroutine[Any, Any, None]]] = {
     "refresh_data": refresh_data.run,
     "run_backtest": run_backtest.run,
+    "live_trade": live_trade.run,
 }
 
 
