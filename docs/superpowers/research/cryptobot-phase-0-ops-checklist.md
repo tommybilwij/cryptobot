@@ -101,3 +101,27 @@ E + F are gated by the build phase — don't worry about them until you're at th
 - [Independent Reserve](https://www.independentreserve.com) — AU-registered AUD ramp
 - [Swyftx](https://swyftx.com.au) — AU-registered AUD ramp
 - [Ledger Nano S Plus](https://shop.ledger.com/products/ledger-nano-s-plus) — recommended hardware wallet
+
+## Live-launch checklist (after Phase 9+)
+
+Run BEFORE flipping `live.dry_run_mode=False`:
+
+- [ ] `just preflight` returns ALL CHECKS PASSED
+- [ ] `just pg-drill` succeeds (backup is restorable)
+- [ ] `POST /api/v1/alerts/test` returns `{sent: true}` (webhook works)
+- [ ] `just hl-calibrate` succeeds (HL signing accepted)
+- [ ] Dry-run loop ran ≥ 24h with no halts
+- [ ] Drawdown brake trigger reviewed (default 5%)
+- [ ] $500 USDC funded to ONE venue (start small, scale up)
+- [ ] You can stop the runner via `POST /api/v1/live/stop` within 10s
+- [ ] Recovery procedure rehearsed: `oms/kill` → `live/stop` → manual position close on venue UI
+
+## Items YOU still have to do operationally
+
+Code can't do these:
+1. **Deposit USDC to Hyperliquid HLP vault** (web UI click; ~10% APR + 3x HYPE airdrop multiplier)
+2. **Complete KYC** on Binance + Bybit (1-7 days)
+3. **Generate Anthropic API key** at console.anthropic.com
+4. **AU fiat ramp** via Independent Reserve or Swyftx → USDC → bridge to venue
+5. **Set `alerts.webhook_url`** in active profile (Discord/Slack/Telegram URL)
+6. **First $500 live trade** — flip flags, monitor, scale based on results

@@ -82,3 +82,15 @@ backtest BACKTEST_ID:
 # Start the live runner loop (uses WORKER_JOB=live_trade); dry-run by default
 live-trade:
     cd backend && WORKER_JOB=live_trade uv run python -m app.worker.main
+
+# pg_dump → restore drill (verifies backups are restorable)
+pg-drill:
+    bash scripts/pg_backup_restore_drill.sh
+
+# Pre-flight go/no-go report before live trading
+preflight:
+    bash scripts/preflight.sh
+
+# Run the HL EIP-712 signing live calibration (requires testnet wallet)
+hl-calibrate:
+    bash scripts/hl_signing_calibration.sh

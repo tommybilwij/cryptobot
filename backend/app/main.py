@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    alerts,
     backtests,
     data_health,
     decision_audit,
@@ -21,7 +22,7 @@ from app.logging_config import setup_logging
 
 setup_logging()
 
-app = FastAPI(title="cryptobot", version="1.10.1", lifespan=lifespan)
+app = FastAPI(title="cryptobot", version="1.11.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -38,3 +39,4 @@ app.include_router(decision_audit.router)
 app.include_router(exchanges.router)
 app.include_router(live.router)
 app.include_router(metrics.router)
+app.include_router(alerts.router)
