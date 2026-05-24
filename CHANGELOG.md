@@ -1,5 +1,14 @@
 # Changelog
 
+### v0.11.0 (2026-05-24)
+
+#### Features
+- `WSClient` Protocol in `backend/app/exchanges/ws/base.py` — push-based fill stream contract (`connect`, `subscribe`, `iter_messages`, `next_fill_for`, `close`); cuts fill-confirmation latency from ~1s REST poll to ~50ms WS push
+- `PaperWSClient` in `backend/app/exchanges/ws/paper_ws.py` — in-memory `asyncio.Queue` implementation for tests; `push()` helper enqueues messages, `next_fill_for()` filters by `order_id` with timeout
+- Venue stubs `BinanceWSClient` / `BybitWSClient` / `HyperliquidWSClient` — `name` attribute + `NotImplementedError` from every Protocol method; real testnet WS calibration is opt-in Phase 11+ slow-test scope
+- 4 new tests covering: connect/close, matching-order return, timeout returns `None`, skipping unmatched messages
+- No OMS integration yet — Phase 12+ wires `ws_client` parameter into `OMS.dispatch()`
+
 ### v0.10.0 (2026-05-24)
 
 #### Features
