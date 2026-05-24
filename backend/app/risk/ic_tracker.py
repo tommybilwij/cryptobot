@@ -38,9 +38,7 @@ class ICSnapshot:
 
 class ICTracker:
     def __init__(self, *, max_samples: int = 1000) -> None:
-        self._records: dict[str, deque[ICRecord]] = defaultdict(
-            lambda: deque(maxlen=max_samples)
-        )
+        self._records: dict[str, deque[ICRecord]] = defaultdict(lambda: deque(maxlen=max_samples))
 
     def record(
         self,
