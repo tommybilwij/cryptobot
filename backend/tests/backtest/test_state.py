@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from app.backtest.state import Bar, MarketSnapshot, MarketState, Position
@@ -19,7 +21,7 @@ def test_bar_is_frozen() -> None:
         close=60010.0,
         volume=10.5,
     )
-    with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
+    with pytest.raises(FrozenInstanceError):
         bar.close = 99.0  # type: ignore[misc]
 
 

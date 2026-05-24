@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from app.backtest.orders import Fill, Order
@@ -16,7 +18,7 @@ def test_order_is_frozen() -> None:
         qty_base=0.1,
         order_type="market",
     )
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         order.qty_base = 99.0  # type: ignore[misc]
 
 
