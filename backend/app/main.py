@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.api import backtests, data_health, health, strategy_profiles
+from app.api import backtests, data_health, health, oms, strategy_profiles
 from app.deps import lifespan
 
 app = FastAPI(title="cryptobot", version="0.4.0", lifespan=lifespan)
@@ -11,3 +11,4 @@ app.include_router(health.router)
 app.include_router(strategy_profiles.router)
 app.include_router(data_health.router)
 app.include_router(backtests.router)
+app.include_router(oms.router)
