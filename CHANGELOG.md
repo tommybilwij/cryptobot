@@ -1,5 +1,14 @@
 # Changelog
 
+### v0.14.0 (2026-05-24)
+
+#### Features
+- `ScoringEngine` for Strategy B (factor portfolio) — composite weighted-sum score over 4 components: `momentum_30d`, `funding_yield`, `realized_vol`, `volume_rank`. Each component has a registry-driven `max_score` (raw → normalised clamp) and `weight` (normalised → weighted contribution)
+- `ComponentScore` / `CompositeScore` dataclasses (frozen) — `CompositeScore` carries `symbol`, `total`, `components` tuple, and a `bucket` (`strong_buy` / `buy` / `watch` / `neutral` / `skip`) sourced from the existing `strategies.factor_portfolio.scoring.thresholds.*` registry block
+- `realized_vol` uses inverted normalisation (lower vol → higher score; centred at 0.5 annualised); all other components use plain linear `raw * max_score` clamped into `[-max_score, +max_score]`
+- 8 new registry keys (`strategies.factor_portfolio.scoring.{component}.{max_score,weight}` for the 4 components); 1 registry test + 8 scoring engine tests. 257 prior + 1 + 8 = 266 tests pass
+- No Strategy B wiring yet — Phase 15 consumes `ScoringEngine` to drive top/bottom decile selection over the universe
+
 ### v0.13.0 (2026-05-24)
 
 #### Features
