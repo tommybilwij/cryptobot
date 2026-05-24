@@ -190,3 +190,18 @@ async def test_hl_fetch_funding_rate_parses_history() -> None:
         )
         rate = await ex.fetch_funding_rate("BTC")
     assert rate == 0.0001
+
+
+@pytest.mark.asyncio
+async def test_hl_amend_order_raises_not_implemented() -> None:
+    """HL has no native amend — Protocol method must raise so callers fall back."""
+    async with AsyncClient() as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = HyperliquidExchange(
+            fetcher=fetcher,
+            params=_params(),
+            wallet_private_key=_TEST_KEY,
+            base_url="https://api.hyperliquid-testnet.xyz",
+        )
+        with pytest.raises(NotImplementedError):
+            await ex.amend_order("42", new_qty=0.1, new_limit_px=60000.0)

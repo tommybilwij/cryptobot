@@ -281,6 +281,23 @@ class HyperliquidExchange:
         # the same EIP-712 envelope as ``place_order``. Phase 7.
         del order_id
 
+    async def amend_order(
+        self,
+        order_id: str,
+        *,
+        new_qty: float | None = None,
+        new_limit_px: float | None = None,
+    ) -> OrderStatus:
+        """Hyperliquid has no native amend — callers must cancel + replace.
+
+        Documented in HL's API: there is no modifyOrder action. Any caller
+        that needs to change qty/price must cancel the resting order and
+        place a fresh one. Raising here makes that contract explicit at the
+        Protocol boundary rather than silently masking with a no-op.
+        """
+        del order_id, new_qty, new_limit_px
+        raise NotImplementedError("Hyperliquid does not support order amendment; cancel + replace")
+
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         del product  # HL is perp-only; product is accepted for protocol parity.
         body = await self._info({"type": "allMids"})

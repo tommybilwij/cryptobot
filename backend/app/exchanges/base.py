@@ -44,6 +44,20 @@ class Exchange(Protocol):
         """Best-effort cancel. No-op if already filled/cancelled."""
         ...
 
+    async def amend_order(
+        self,
+        order_id: str,
+        *,
+        new_qty: float | None = None,
+        new_limit_px: float | None = None,
+    ) -> OrderStatus:
+        """Amend an open order's qty and/or limit price. Returns new status.
+
+        Venues without native amend (e.g. Hyperliquid) raise
+        ``NotImplementedError``; callers must fall back to cancel + replace.
+        """
+        ...
+
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         """Current mark / index / last-price for the (symbol, product) pair."""
         ...

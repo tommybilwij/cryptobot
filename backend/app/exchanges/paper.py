@@ -93,6 +93,32 @@ class PaperExchange:
         # Market orders fill immediately; cancel is a no-op
         return
 
+    async def amend_order(
+        self,
+        order_id: str,
+        *,
+        new_qty: float | None = None,
+        new_limit_px: float | None = None,
+    ) -> OrderStatus:
+        """Return a synthetic amended status. Paper does not re-simulate fills.
+
+        Phase 11 contract: the amend method exists on the Protocol so live
+        callers can use it; PaperExchange echoes the existing status with the
+        amend payload in ``raw`` so unit tests can assert the path was taken
+        without coupling to a full re-fill simulator.
+        """
+        if order_id not in self._orders:
+            raise KeyError(order_id)
+        existing = self._orders[order_id]
+        return OrderStatus(
+            order_id=order_id,
+            status=existing.status,
+            fill_px=existing.fill_px,
+            filled_qty_base=existing.filled_qty_base,
+            fee_quote=existing.fee_quote,
+            raw={"amended_qty": new_qty, "amended_limit_px": new_limit_px},
+        )
+
     def _simulate_fill(self, order: Order, order_id: str) -> OrderStatus:
         mark = self._marks.get((order.symbol, order.product))
         if mark is None:

@@ -205,6 +205,50 @@ async def test_binance_fetch_order_parses_open_order() -> None:
 
 
 @pytest.mark.asyncio
+async def test_binance_amend_order_returns_new_order_status() -> None:
+    """amend_order POSTs to /api/v3/order/cancelReplace and parses the new orderId."""
+    captured: dict[str, Any] = {}
+
+    async def mock_post(
+        self: httpx.AsyncClient,
+        url: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
+        captured["url"] = url
+        return Response(
+            200,
+            json={
+                "cancelResponse": {"orderId": 12345},
+                "newOrderResponse": {
+                    "orderId": 67890,
+                    "symbol": "BTCUSDT",
+                    "status": "NEW",
+                },
+            },
+        )
+
+    async with AsyncClient() as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = BinanceExchange(
+            fetcher=fetcher,
+            params=_params(),
+            api_key="t",
+            api_secret="t",
+            base_url="https://testnet.binance.vision",
+        )
+        with patch.object(httpx.AsyncClient, "post", mock_post):
+            status = await ex.amend_order("12345", new_qty=0.2, new_limit_px=59000.0)
+
+    assert "cancelReplace" in captured["url"]
+    assert "cancelOrderId=12345" in captured["url"]
+    assert "quantity=0.2" in captured["url"]
+    assert "price=59000.0" in captured["url"]
+    assert status.order_id == "67890"
+    assert status.status == "pending"
+
+
+@pytest.mark.asyncio
 async def test_auth_failure_raises() -> None:
     def handler(req: Request) -> Response:
         return Response(401, json={"code": -2014, "msg": "API-key format invalid."})

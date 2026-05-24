@@ -189,6 +189,10 @@ PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str] = {
     # ── Alerts (Phase 9) ─────────────────────────────────────────────────
     "alerts.webhook_url": "",
     "alerts.heartbeat_severity": "info",
+    # ── Wallet rotation (Phase 11) ───────────────────────────────────────
+    # Picks an env-key suffix (e.g. "a" or "b") for hot-swapping sub-account
+    # API keys with zero downtime. Empty string = use the base key.
+    "wallet.active_suffix": "",
 }
 
 

@@ -113,3 +113,31 @@ async def test_paper_fetch_funding_rate_missing_returns_none() -> None:
     ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
     rate = await ex.fetch_funding_rate("BTCUSDT")
     assert rate is None
+
+
+@pytest.mark.asyncio
+async def test_paper_amend_order_echoes_status_with_amend_payload() -> None:
+    """Paper amend returns the existing status with the amend payload in ``raw``."""
+    ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
+    ex.set_mark_price("BTCUSDT", "spot", 60000.0)
+    receipt = await ex.place_order(
+        Order(
+            venue="binance",
+            symbol="BTCUSDT",
+            product="spot",
+            side="buy",
+            qty_base=0.1,
+            order_type="market",
+        )
+    )
+    amended = await ex.amend_order(receipt.order_id, new_qty=0.2, new_limit_px=59000.0)
+    assert amended.order_id == receipt.order_id
+    assert amended.raw["amended_qty"] == 0.2
+    assert amended.raw["amended_limit_px"] == 59000.0
+
+
+@pytest.mark.asyncio
+async def test_paper_amend_unknown_order_raises() -> None:
+    ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
+    with pytest.raises(KeyError):
+        await ex.amend_order("nonexistent", new_qty=1.0)
