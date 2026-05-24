@@ -24,3 +24,22 @@ async def test_metrics_includes_help_and_type_lines(async_client: AsyncClient) -
     body = r.text
     assert "# HELP cryptobot_up" in body
     assert "# TYPE cryptobot_up gauge" in body
+
+
+@pytest.mark.asyncio
+async def test_metrics_includes_dispatch_counters(async_client: AsyncClient) -> None:
+    from app.services.metrics_collector import collector
+
+    collector.reset()
+    collector.record_dispatch(latency_ms=42.0, status="ok")
+    collector.record_fill(partial=False)
+    collector.record_halt("KillSwitchActive")
+
+    r = await async_client.get("/api/v1/metrics")
+    assert r.status_code == 200
+    body = r.text
+    assert "cryptobot_dispatch_total" in body
+    assert "cryptobot_fills_total" in body
+    assert "cryptobot_halts_total" in body
+    assert 'class="KillSwitchActive"' in body
+    collector.reset()

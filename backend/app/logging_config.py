@@ -8,6 +8,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.correlation import current as _correlation_current
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -17,6 +19,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "msg": record.getMessage(),
         }
+        dispatch_id = _correlation_current()
+        if dispatch_id is not None:
+            payload["dispatch_id"] = dispatch_id
         if record.exc_info:
             payload["exc_type"] = record.exc_info[0].__name__ if record.exc_info[0] else None
             payload["exc_text"] = self.formatException(record.exc_info)
