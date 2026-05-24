@@ -1,11 +1,13 @@
 """Worker job — drives the LiveRunner loop.
 
 Loads the active StrategyProfile, builds the Phase 8 dependency graph
-(PaperExchange + OMS + LiveRunner) from registry values only, and runs
+(Exchange adapters + OMS + LiveRunner) from registry values only, and runs
 the loop until ``stop()`` or the drawdown brake halts.
 
-Phase 8 is dry-run only — ``PaperExchange`` is wired unconditionally.
-Real venue adapters land in Phase 9 once dry-run validates over days.
+Phase 9: adapters are built via ``exchange_factory.build_exchange`` which
+returns a real venue adapter when env keys are present and dry-run is off,
+or a ``PaperExchange`` otherwise. Webhook alerts on halt classes / heartbeats
+are wired through an ``Alerter`` sharing the same ``RetryingFetcher``.
 """
 
 from __future__ import annotations
@@ -15,11 +17,13 @@ import json
 import logging
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 
+from app.config import settings
 from app.deps import get_session_factory
 from app.exchanges.base import Exchange
-from app.exchanges.paper import PaperExchange
+from app.market_data._http import RetryingFetcher
 from app.models.strategy_profile import StrategyProfile
 from app.oms.kill_switch import KillSwitch
 from app.oms.ledger import MultiVenueCashLedger
@@ -27,13 +31,15 @@ from app.oms.reconciler import PositionReconciler
 from app.oms.service import OMS
 from app.profile.params import ProfileParams
 from app.risk.drawdown_brake import DrawdownBrake
+from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
+from app.services.exchange_factory import build_exchange
 from app.services.live_runner import LiveRunner
 from app.strategies.funding_arb import FundingArbStrategy
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_INITIAL_CASH = 10_000.0
+_VENUES: tuple[str, ...] = ("binance", "bybit", "hyperliquid")
 
 
 def _hash(d: dict[str, Any]) -> str:
@@ -61,40 +67,56 @@ async def run() -> None:
         params = ProfileParams(profile=profile.config)
         venue = str(params.get("live.venue"))
         symbol = str(params.get("strategies.funding_arb.default_symbol"))
-        exchanges: dict[str, Exchange] = {
-            venue: PaperExchange(
-                venue=venue, params=params, initial_cash=_DEFAULT_INITIAL_CASH
+        dry_run = bool(params.get("live.dry_run_mode"))
+
+        # Shared HTTP client for the entire run — both the factory-built
+        # adapters and the Alerter draw their RetryingFetcher from it. The
+        # ``async with`` scope must enclose ``runner.run()`` so the fetcher
+        # remains live for the duration of the loop.
+        async with httpx.AsyncClient() as http_client:
+            fetcher = RetryingFetcher(client=http_client, base_backoff_s=0.0)
+            exchanges: dict[str, Exchange] = {
+                v: build_exchange(
+                    v,
+                    params=params,
+                    fetcher=fetcher,
+                    settings=settings,
+                    dry_run=dry_run,
+                )
+                for v in _VENUES
+            }
+            alerter = Alerter(params=params, fetcher=fetcher)
+            strategy = FundingArbStrategy(venue=venue, symbol=symbol)
+            oms = OMS(
+                exchanges=exchanges,
+                audit_service=DecisionAuditService(session),
+                params=params,
+                kill_switch=KillSwitch(params=params),
+                reconciler=PositionReconciler(params=params),
+                ledger=MultiVenueCashLedger(),
             )
-        }
-        strategy = FundingArbStrategy(venue=venue, symbol=symbol)
-        oms = OMS(
-            exchanges=exchanges,
-            audit_service=DecisionAuditService(session),
-            params=params,
-            kill_switch=KillSwitch(params=params),
-            reconciler=PositionReconciler(params=params),
-            ledger=MultiVenueCashLedger(),
-        )
-        runner = LiveRunner(
-            exchanges=exchanges,
-            strategy=strategy,
-            oms=oms,
-            audit_service=DecisionAuditService(session),
-            params=params,
-            drawdown_brake=DrawdownBrake(params=params),
-            venue=venue,
-            symbols=[symbol],
-            profile_id=profile.id,
-            profile_version=profile.version,
-            profile_hash=_hash(profile.config),
-        )
-        logger.info(
-            "live_trade starting",
-            extra={
-                "profile_id": str(profile.id),
-                "profile_version": profile.version,
-                "venue": venue,
-                "symbol": symbol,
-            },
-        )
-        await runner.run()
+            runner = LiveRunner(
+                exchanges=exchanges,
+                strategy=strategy,
+                oms=oms,
+                audit_service=DecisionAuditService(session),
+                params=params,
+                drawdown_brake=DrawdownBrake(params=params),
+                alerter=alerter,
+                venue=venue,
+                symbols=[symbol],
+                profile_id=profile.id,
+                profile_version=profile.version,
+                profile_hash=_hash(profile.config),
+            )
+            logger.info(
+                "live_trade starting",
+                extra={
+                    "profile_id": str(profile.id),
+                    "profile_version": profile.version,
+                    "venue": venue,
+                    "symbol": symbol,
+                    "dry_run": dry_run,
+                },
+            )
+            await runner.run()
