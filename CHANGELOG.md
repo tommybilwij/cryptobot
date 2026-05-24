@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.10.0 (2026-05-24)
+
+#### Features
+- `SizingService` in `backend/app/risk/sizing.py` — unified Kelly fraction + vol target + drawdown brake multiplier. Pure function, all knobs from the profile registry (Constraint #1)
+- Kelly fraction: `(funding_rate * intervals_per_year) / vol^2 * risk.kelly.fraction`, clamped to `risk.kelly.baseline_cap` (default 2%)
+- Vol target: `risk.vol_target.target_pct / realized_vol`, same baseline cap
+- Drawdown brake multiplier: 1.0 above `risk.drawdown_brake.trigger_pct`, linear ramp to `risk.drawdown_brake.min_mult` (0.25) at `risk.drawdown_brake.full_pct` (15%)
+- `FundingArbStrategy._open_hedge` routes through `SizingService` when `risk.kelly.enabled=True`; opt-in (default 0.0) so existing tests + live behaviour unchanged
+- Phase 10 simplification: vol fixed at 0.6 placeholder, equity == cash_quote (no MTM). Real estimators in Phase 11+
+- 6 new tests covering: zero funding → zero notional, Kelly clipped at baseline cap, zero vol guard, drawdown ramp at partial / full halt, max_notional cap
+
 ### v0.9.0 (2026-05-24)
 
 #### Features

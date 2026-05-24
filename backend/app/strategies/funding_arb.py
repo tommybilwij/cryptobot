@@ -13,8 +13,11 @@ from typing import Literal
 from app.backtest.orders import Order
 from app.backtest.state import MarketState, Position
 from app.profile.params import ProfileParams
+from app.risk.sizing import SizingService
 
 _BPS_DIVISOR = 10_000.0
+# Phase 10 placeholder vol; Phase 11+ wires a real rolling stdev estimator.
+_PHASE_10_VOL_PLACEHOLDER = 0.6
 
 
 class FundingArbStrategy:
@@ -110,7 +113,27 @@ class FundingArbStrategy:
             return []
         max_notional = float(params.get("strategies.funding_arb.max_notional_usdc"))
         cash_frac = float(params.get("strategies.funding_arb.max_cash_fraction"))
-        target = min(max_notional, state.cash_quote * cash_frac)
+        kelly_enabled = float(params.get("risk.kelly.enabled")) > 0.0
+        if kelly_enabled:
+            # Kelly + vol target + drawdown ramp. Phase 10: vol is a stub; the
+            # real estimator lands in Phase 11. Equity-without-MTM (cash_quote)
+            # is a deliberate simplification for the opt-in path — the live
+            # runner has the MTM, but the engine doesn't yet expose it here.
+            sizer = SizingService(params=params)
+            funding_rate = state.snapshot.funding_rates.get(
+                (self._venue, self._symbol), 0.0
+            )
+            peak_equity = float(params.get("risk.drawdown_brake.peak_equity"))
+            target = sizer.compute_notional(
+                funding_rate_per_interval=funding_rate,
+                realized_vol=_PHASE_10_VOL_PLACEHOLDER,
+                cash_quote=state.cash_quote,
+                peak_equity=peak_equity,
+                current_equity=state.cash_quote,
+                max_notional_cap=max_notional,
+            )
+        else:
+            target = min(max_notional, state.cash_quote * cash_frac)
         if target <= 0.0:
             return []
         qty = target / spot_bar.close
