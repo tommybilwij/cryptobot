@@ -4,7 +4,7 @@
 **Status**: approved (autonomous mode)
 **Phase**: 9 of the cryptobot build
 **Blocks**: Phase 10+ (scale + risk machinery)
-**Revision history**: v1 — initial. PR #<fill-in-after-merge>.
+**Revision history**: v1 — initial. PR #11.
 
 ## Goal
 
