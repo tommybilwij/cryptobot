@@ -115,6 +115,8 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "oms.fill_poll_interval_s": 1.0,
     "oms.max_fill_wait_s": 30.0,
     "oms.audit_snapshot_interval_s": 3600,
+    "oms.partial_fill_min_remainder_qty": 0.0001,
+    "oms.max_partial_fill_retries": 3,
     # ── Exchange timeouts ────────────────────────────────────────────────
     "exchanges.binance.timeout_s": 10.0,
     "exchanges.bybit.timeout_s": 10.0,
@@ -256,6 +258,8 @@ PROFILE_SCOPED_DICT_DEFAULTS: dict[str, dict[str, Any]] = {
 PROFILE_SCOPED_BOOL_DEFAULTS: dict[str, bool] = {
     # ── OMS kill switch ──────────────────────────────────────────────────
     "oms.kill_switch_active": False,
+    # ── OMS hedge auto-rebalance (opt-in; default safe = halt) ───────────
+    "oms.hedge_auto_rebalance_enabled": False,
     # ── Per-venue testnet/mainnet toggle ─────────────────────────────────
     "exchanges.binance.use_testnet": True,
     "exchanges.bybit.use_testnet": True,

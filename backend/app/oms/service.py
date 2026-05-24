@@ -27,10 +27,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from app.backtest.orders import Fill, Order
-from app.backtest.state import MarketState
+from app.backtest.state import MarketState, Position
 from app.exchanges.base import Exchange
 from app.exchanges.errors import AuthFailed
 from app.exchanges.types import ExchangePosition, OrderStatus
@@ -59,6 +59,7 @@ _STATUS_UNCONFIGURED_VENUE = "unconfigured_venue"
 _STATUS_AUTH_FAILED = "auth_failed"
 _STATUS_HALTED_HEDGE_DRIFT = "halted_hedge_drift"
 _STATUS_HALTED_BOOK_DRIFT = "halted_book_drift"
+_STATUS_AUTO_REBALANCE = "auto_rebalance"
 
 
 @dataclass
@@ -141,21 +142,13 @@ class OMS:
                 )
 
         # 3. Place orders sequentially and poll for terminal status.
+        #    Partial fills auto-retry the remainder up to
+        #    `oms.max_partial_fill_retries`; see `_place_with_partial_retry`.
         fills: list[Fill] = []
         try:
             for order in orders:
                 ex = self._exchanges[order.venue]
-                receipt = await ex.place_order(order)
-                status = await self._poll_until_terminal(ex, receipt.order_id)
-                if status.status in _FILLED_STATUSES and status.fill_px is not None:
-                    fills.append(
-                        Fill(
-                            ts_ms=int(time.time() * _MS_PER_SECOND),
-                            order=order,
-                            fill_px=status.fill_px,
-                            fee_quote=status.fee_quote,
-                        )
-                    )
+                fills.extend(await self._place_with_partial_retry(ex, order))
         except AuthFailed as e:
             entry = await self._audit.log_decision(
                 ts=ts,
@@ -175,25 +168,10 @@ class OMS:
         #    needs hedge-consistency to fire on pre-existing book drift.
         #    Book-vs-exchange only runs when we actually touched a venue (no
         #    orders → no exchange snapshot to compare against).
-        reconciliation_status = _STATUS_OK
-        reason: str | None = None
-        try:
-            touched_venues: set[str] = {o.venue for o in orders}
-            if touched_venues:
-                ex_positions: list[ExchangePosition] = []
-                for venue in touched_venues:
-                    ex_positions.extend(await self._exchanges[venue].fetch_positions())
-                self._reconciler.check_book_vs_exchange(
-                    book_positions=state.positions,
-                    exchange_positions=tuple(ex_positions),
-                )
-            self._reconciler.check_hedge_consistency(positions=state.positions)
-        except HedgeDriftHalt as e:
-            reconciliation_status = _STATUS_HALTED_HEDGE_DRIFT
-            reason = str(e)
-        except ReconciliationDriftHalt as e:
-            reconciliation_status = _STATUS_HALTED_BOOK_DRIFT
-            reason = str(e)
+        reconciliation_status, reason, rebalance_fills = await self._reconcile(
+            orders=orders, state=state
+        )
+        fills.extend(rebalance_fills)
 
         # 5. Log a single audit entry summarising the dispatch.
         entry = await self._audit.log_decision(
@@ -222,6 +200,151 @@ class OMS:
             reconciliation_status=reconciliation_status,
             reason=reason,
         )
+
+    async def _reconcile(
+        self, *, orders: list[Order], state: MarketState
+    ) -> tuple[str, str | None, list[Fill]]:
+        """Run book-vs-exchange + hedge-consistency checks.
+
+        Returns ``(reconciliation_status, reason, rebalance_fills)``.
+        Hedge drift with ``oms.hedge_auto_rebalance_enabled=True`` produces
+        ``auto_rebalance`` status + the closing-leg fills; otherwise sets the
+        halted status and the caller raises after the audit row lands.
+        """
+        rebalance_fills: list[Fill] = []
+        try:
+            touched_venues: set[str] = {o.venue for o in orders}
+            if touched_venues:
+                ex_positions: list[ExchangePosition] = []
+                for venue in touched_venues:
+                    ex_positions.extend(await self._exchanges[venue].fetch_positions())
+                self._reconciler.check_book_vs_exchange(
+                    book_positions=state.positions,
+                    exchange_positions=tuple(ex_positions),
+                )
+            self._reconciler.check_hedge_consistency(positions=state.positions)
+        except HedgeDriftHalt as e:
+            # Opt-in: when `oms.hedge_auto_rebalance_enabled=True`, the OMS
+            # closes the over-sized leg's excess instead of halting. Default
+            # stays False — halting is the safe path.
+            if bool(self._params.get("oms.hedge_auto_rebalance_enabled")):
+                rebalance_fills = await self._auto_rebalance_hedge(state)
+                return _STATUS_AUTO_REBALANCE, f"auto-rebalanced: {e}", rebalance_fills
+            return _STATUS_HALTED_HEDGE_DRIFT, str(e), rebalance_fills
+        except ReconciliationDriftHalt as e:
+            return _STATUS_HALTED_BOOK_DRIFT, str(e), rebalance_fills
+        return _STATUS_OK, None, rebalance_fills
+
+    async def _place_with_partial_retry(
+        self, exchange: Exchange, order: Order
+    ) -> list[Fill]:
+        """Place ``order``; re-queue any unfilled remainder up to N retries.
+
+        Returns the list of fills (one per successful partial / full fill).
+        Stops on:
+          - full fill,
+          - remainder below ``oms.partial_fill_min_remainder_qty``,
+          - ``oms.max_partial_fill_retries`` exhausted,
+          - cancelled / rejected / timed-out status.
+        """
+        fills: list[Fill] = []
+        remaining_qty = order.qty_base
+        max_retries = int(self._params.get("oms.max_partial_fill_retries"))
+        min_remainder = float(self._params.get("oms.partial_fill_min_remainder_qty"))
+        retries = 0
+        while remaining_qty >= min_remainder and retries <= max_retries:
+            retry_order = Order(
+                venue=order.venue,
+                symbol=order.symbol,
+                product=order.product,
+                side=order.side,
+                qty_base=remaining_qty,
+                order_type=order.order_type,
+                limit_px=order.limit_px,
+            )
+            receipt = await exchange.place_order(retry_order)
+            status = await self._poll_until_terminal(exchange, receipt.order_id)
+            if status.status in _FILLED_STATUSES and status.fill_px is not None:
+                # Record the Fill with the *actual* filled qty (which may be
+                # less than the placed order on partials), so summing fills
+                # across retries reconciles back to the original request.
+                filled_leg = Order(
+                    venue=retry_order.venue,
+                    symbol=retry_order.symbol,
+                    product=retry_order.product,
+                    side=retry_order.side,
+                    qty_base=status.filled_qty_base,
+                    order_type=retry_order.order_type,
+                    limit_px=retry_order.limit_px,
+                )
+                fills.append(
+                    Fill(
+                        ts_ms=int(time.time() * _MS_PER_SECOND),
+                        order=filled_leg,
+                        fill_px=status.fill_px,
+                        fee_quote=status.fee_quote,
+                    )
+                )
+                remaining_qty -= status.filled_qty_base
+                if status.status == "filled" or remaining_qty < min_remainder:
+                    break
+            else:
+                # rejected / cancelled / timed-out — stop retrying
+                break
+            retries += 1
+        return fills
+
+    async def _auto_rebalance_hedge(self, state: MarketState) -> list[Fill]:
+        """Emit a closing order for the over-sized leg of each spot/perp pair.
+
+        Walks every (venue, symbol) that has both legs; for any imbalance
+        emits a market order on the over-sized leg in the direction that
+        reduces its magnitude. Uses ``_place_with_partial_retry`` so the
+        rebalance order itself benefits from partial-fill aggregation.
+        """
+        by_symbol: dict[tuple[str, str], dict[str, Position]] = {}
+        for p in state.positions:
+            key = (p.venue, p.symbol)
+            by_symbol.setdefault(key, {})[p.product] = p
+
+        fills: list[Fill] = []
+        for (venue, symbol), legs in by_symbol.items():
+            if "spot" not in legs or "perp" not in legs:
+                continue
+            spot_qty = abs(legs["spot"].qty_base)
+            perp_qty = abs(legs["perp"].qty_base)
+            if spot_qty == perp_qty:
+                continue
+            # Close the over-sized leg's excess. Side reduces magnitude:
+            # long spot (qty > 0) → sell to reduce; short perp (qty < 0) → buy to reduce.
+            if spot_qty > perp_qty:
+                excess = spot_qty - perp_qty
+                side: Literal["buy", "sell"] = "sell" if legs["spot"].qty_base > 0 else "buy"
+                rebal_order = Order(
+                    venue=venue,
+                    symbol=symbol,
+                    product="spot",
+                    side=side,
+                    qty_base=excess,
+                    order_type="market",
+                )
+            else:
+                excess = perp_qty - spot_qty
+                side = "buy" if legs["perp"].qty_base < 0 else "sell"
+                rebal_order = Order(
+                    venue=venue,
+                    symbol=symbol,
+                    product="perp",
+                    side=side,
+                    qty_base=excess,
+                    order_type="market",
+                )
+            ex = self._exchanges.get(venue)
+            if ex is None:
+                continue
+            rebal_fills = await self._place_with_partial_retry(ex, rebal_order)
+            fills.extend(rebal_fills)
+        return fills
 
     async def _poll_until_terminal(self, ex: Exchange, order_id: str) -> OrderStatus:
         """Poll ``fetch_order`` until terminal status or timeout.
