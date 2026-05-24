@@ -296,6 +296,191 @@ async def test_partial_fill_requeues_remainder(db_session: AsyncSession) -> None
 
 
 @pytest.mark.asyncio
+async def test_dispatch_uses_ws_when_provided(db_session: AsyncSession) -> None:
+    """When a WS client is provided, OMS reads the fill from the push stream
+    and never polls REST ``fetch_order``."""
+    from app.exchanges.types import Balance, OrderReceipt
+    from app.exchanges.ws.paper_ws import PaperWSClient
+
+    class _RestForbiddenExchange:
+        """Adapter whose REST fill-poll path explodes if hit."""
+
+        name = "binance"
+
+        async def fetch_balance(self, quote_currency):  # type: ignore[no-untyped-def]
+            return Balance(
+                venue="binance",
+                quote_currency=quote_currency,
+                free=10_000.0,
+                locked=0.0,
+            )
+
+        async def fetch_positions(self):  # type: ignore[no-untyped-def]
+            return ()
+
+        async def fetch_funding_rate(self, symbol):  # type: ignore[no-untyped-def]
+            return None
+
+        async def fetch_mark_price(self, symbol, product):  # type: ignore[no-untyped-def]
+            return 60_000.0
+
+        async def place_order(self, order):  # type: ignore[no-untyped-def]
+            return OrderReceipt(
+                order_id="ws-order-1",
+                venue="binance",
+                symbol=order.symbol,
+                submitted_ts_ms=1,
+            )
+
+        async def fetch_order(self, order_id):  # type: ignore[no-untyped-def]
+            raise AssertionError("REST fetch_order should not be hit when WS push is available")
+
+        async def cancel_order(self, order_id):  # type: ignore[no-untyped-def]
+            return
+
+    params = ProfileParams(profile={})
+    ws = PaperWSClient()
+    # Seed a Binance-shaped executionReport for our order_id
+    ws.push(
+        {
+            "e": "executionReport",
+            "i": "ws-order-1",
+            "order_id": "ws-order-1",
+            "X": "FILLED",
+            "L": 60_010.0,
+            "z": 0.1,
+            "n": 0.5,
+        }
+    )
+
+    profile = StrategyProfile(name="ws-test", version=1, is_active=False, config={})
+    db_session.add(profile)
+    await db_session.flush()
+
+    oms = OMS(
+        exchanges={"binance": _RestForbiddenExchange()},  # type: ignore[dict-item]
+        audit_service=DecisionAuditService(db_session),
+        params=params,
+        kill_switch=KillSwitch(params=params),
+        reconciler=PositionReconciler(params=params),
+        ledger=MultiVenueCashLedger(),
+        ws_clients={"binance": ws},  # type: ignore[dict-item]
+    )
+
+    order = Order(
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
+    )
+    result = await oms.dispatch(
+        orders=[order],
+        state=_state(),
+        strategy_name="test_strategy",
+        profile_id=profile.id,
+        profile_version=1,
+        profile_hash="abc",
+    )
+
+    assert len(result.fills) == 1
+    assert result.fills[0].fill_px == pytest.approx(60_010.0)
+    # qty taken from WS message (z=0.1)
+    assert result.fills[0].order.qty_base == pytest.approx(0.1)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_falls_back_to_rest_on_ws_timeout(db_session: AsyncSession) -> None:
+    """WS returns None (no fill within timeout) → OMS falls back to REST poll."""
+    from app.exchanges.types import Balance, OrderReceipt, OrderStatus
+    from app.exchanges.ws.paper_ws import PaperWSClient
+
+    rest_calls = {"n": 0}
+
+    class _RestFillExchange:
+        name = "binance"
+
+        async def fetch_balance(self, quote_currency):  # type: ignore[no-untyped-def]
+            return Balance(
+                venue="binance",
+                quote_currency=quote_currency,
+                free=10_000.0,
+                locked=0.0,
+            )
+
+        async def fetch_positions(self):  # type: ignore[no-untyped-def]
+            return ()
+
+        async def fetch_funding_rate(self, symbol):  # type: ignore[no-untyped-def]
+            return None
+
+        async def fetch_mark_price(self, symbol, product):  # type: ignore[no-untyped-def]
+            return 60_000.0
+
+        async def place_order(self, order):  # type: ignore[no-untyped-def]
+            return OrderReceipt(
+                order_id="rest-order-1",
+                venue="binance",
+                symbol=order.symbol,
+                submitted_ts_ms=1,
+            )
+
+        async def fetch_order(self, order_id):  # type: ignore[no-untyped-def]
+            rest_calls["n"] += 1
+            return OrderStatus(
+                order_id=order_id,
+                status="filled",
+                fill_px=60_000.0,
+                filled_qty_base=0.1,
+                fee_quote=0.5,
+                raw={},
+            )
+
+        async def cancel_order(self, order_id):  # type: ignore[no-untyped-def]
+            return
+
+    # Short WS timeout so the test doesn't hang
+    params = ProfileParams(profile={"oms": {"max_fill_wait_s": 0.05}})
+    ws = PaperWSClient()  # empty queue → next_fill_for times out immediately
+
+    profile = StrategyProfile(name="ws-timeout-test", version=1, is_active=False, config={})
+    db_session.add(profile)
+    await db_session.flush()
+
+    oms = OMS(
+        exchanges={"binance": _RestFillExchange()},  # type: ignore[dict-item]
+        audit_service=DecisionAuditService(db_session),
+        params=params,
+        kill_switch=KillSwitch(params=params),
+        reconciler=PositionReconciler(params=params),
+        ledger=MultiVenueCashLedger(),
+        ws_clients={"binance": ws},  # type: ignore[dict-item]
+    )
+
+    order = Order(
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
+    )
+    result = await oms.dispatch(
+        orders=[order],
+        state=_state(),
+        strategy_name="test_strategy",
+        profile_id=profile.id,
+        profile_version=1,
+        profile_hash="abc",
+    )
+
+    assert len(result.fills) == 1
+    # REST was used as the fallback path
+    assert rest_calls["n"] >= 1
+
+
+@pytest.mark.asyncio
 async def test_hedge_auto_rebalance_when_enabled(db_session: AsyncSession) -> None:
     """When oms.hedge_auto_rebalance_enabled=True, drift triggers a closing order."""
     from app.backtest.state import Position

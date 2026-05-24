@@ -33,6 +33,10 @@ logs *args:
 test *args:
     cd backend && uv run pytest "$@"
 
+# Run the load test (slow-marker; deselected by default)
+load-test:
+    cd backend && uv run pytest -m slow tests/load/ -v
+
 # Run typechecker (mypy strict)
 typecheck:
     cd backend && uv run mypy app

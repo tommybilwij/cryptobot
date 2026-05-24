@@ -27,13 +27,16 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from app.backtest.orders import Fill, Order
 from app.backtest.state import MarketState, Position
 from app.exchanges.base import Exchange
 from app.exchanges.errors import AuthFailed
 from app.exchanges.types import ExchangePosition, OrderStatus
+
+if TYPE_CHECKING:
+    from app.exchanges.ws.base import WSClient
 from app.oms.exceptions import (
     HedgeDriftHalt,
     KillSwitchActive,
@@ -86,6 +89,7 @@ class OMS:
         kill_switch: KillSwitch,
         reconciler: PositionReconciler,
         ledger: MultiVenueCashLedger,
+        ws_clients: dict[str, WSClient] | None = None,
     ) -> None:
         self._exchanges = exchanges
         self._audit = audit_service
@@ -93,6 +97,10 @@ class OMS:
         self._kill_switch = kill_switch
         self._reconciler = reconciler
         self._ledger = ledger
+        # Optional per-venue WS clients. When a venue has a client, fill
+        # status is pulled via push (``next_fill_for``) instead of REST
+        # polling. REST is used as fallback on WS timeout.
+        self._ws_clients = ws_clients
 
     async def dispatch(
         self,
@@ -378,12 +386,27 @@ class OMS:
         return fills
 
     async def _poll_until_terminal(self, ex: Exchange, order_id: str) -> OrderStatus:
-        """Poll ``fetch_order`` until terminal status or timeout.
+        """Wait for terminal status via WS push (if available) or REST poll.
 
-        On timeout, best-effort ``cancel_order`` and return the last status.
+        Preference order:
+          1. WS push via ``ws_clients[ex.name].next_fill_for(order_id, ...)``.
+             Returns immediately when a fill event arrives.
+          2. REST poll fallback. Used when no WS client is configured for the
+             venue OR when the WS path returns ``None`` (timeout / no fill).
+
+        On REST timeout, best-effort ``cancel_order`` and return the last status.
         """
-        poll_interval = float(self._params.get("oms.fill_poll_interval_s"))
         max_wait = float(self._params.get("oms.max_fill_wait_s"))
+
+        if self._ws_clients is not None and ex.name in self._ws_clients:
+            ws = self._ws_clients[ex.name]
+            msg = await ws.next_fill_for(order_id, timeout_s=max_wait)
+            if msg is not None:
+                return self._status_from_ws_msg(msg, order_id)
+            # ws timeout → fall through to REST poll once (single shot;
+            # the WS path already consumed the wait budget)
+
+        poll_interval = float(self._params.get("oms.fill_poll_interval_s"))
         deadline = time.monotonic() + max_wait
         status = await ex.fetch_order(order_id)
         while status.status not in _TERMINAL_STATUSES:
@@ -393,6 +416,73 @@ class OMS:
             await asyncio.sleep(poll_interval)
             status = await ex.fetch_order(order_id)
         return status
+
+    @staticmethod
+    def _status_from_ws_msg(msg: dict[str, Any], order_id: str) -> OrderStatus:
+        """Normalise a venue-specific WS fill message to ``OrderStatus``.
+
+        Handles Binance (``executionReport`` with ``i``/``X``/``L``/``z``/``n``),
+        Bybit (``orderId``/``orderStatus``/``avgPrice``/``cumExecQty``/``cumExecFee``),
+        and Hyperliquid (``oid``/``px``/``sz``/``fee``) shapes. Falls back to
+        ``filled`` when shape is unknown but ``msg`` carries enough for a Fill.
+        """
+        # Binance executionReport: e=executionReport, i=orderId, X=status,
+        # L=last filled price, z=cumulative filled qty, n=commission
+        if msg.get("e") == "executionReport":
+            x_status = msg.get("X", "FILLED")
+            normalized: Literal[
+                "pending", "filled", "partially_filled", "cancelled", "rejected"
+            ] = "partially_filled" if x_status == "PARTIALLY_FILLED" else "filled"
+            return OrderStatus(
+                order_id=order_id,
+                status=normalized,
+                fill_px=float(msg.get("L", 0.0)) or None,
+                filled_qty_base=float(msg.get("z", 0.0)),
+                fee_quote=float(msg.get("n", 0.0)),
+                raw=msg,
+            )
+
+        # Bybit V5 execution / order updates
+        if "orderId" in msg or "execId" in msg:
+            order_status = msg.get("orderStatus", "Filled")
+            normalized = (
+                "partially_filled"
+                if order_status == "PartiallyFilled"
+                else "filled"
+            )
+            return OrderStatus(
+                order_id=order_id,
+                status=normalized,
+                fill_px=(
+                    float(msg.get("avgPrice") or msg.get("execPrice") or 0.0) or None
+                ),
+                filled_qty_base=float(
+                    msg.get("cumExecQty") or msg.get("execQty") or 0.0
+                ),
+                fee_quote=float(msg.get("cumExecFee") or msg.get("execFee") or 0.0),
+                raw=msg,
+            )
+
+        # Hyperliquid userFills: oid, px, sz, fee
+        if "oid" in msg:
+            return OrderStatus(
+                order_id=order_id,
+                status="filled",
+                fill_px=float(msg.get("px", 0.0)) or None,
+                filled_qty_base=float(msg.get("sz", 0.0)),
+                fee_quote=float(msg.get("fee", 0.0)),
+                raw=msg,
+            )
+
+        # Unknown shape — best-effort minimal Fill
+        return OrderStatus(
+            order_id=order_id,
+            status="filled",
+            fill_px=float(msg.get("fill_px") or msg.get("price") or 0.0) or None,
+            filled_qty_base=float(msg.get("filled_qty_base") or msg.get("qty") or 0.0),
+            fee_quote=float(msg.get("fee_quote") or msg.get("fee") or 0.0),
+            raw=msg,
+        )
 
 
 def _serialize_order(o: Order) -> dict[str, Any]:
