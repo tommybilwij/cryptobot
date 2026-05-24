@@ -1,25 +1,28 @@
 """Hyperliquid REST adapter.
 
 Hyperliquid is an L1 with a centralised order book API. Auth is via EVM-style
-signing: each action is signed with the user's EVM private key. Phase 5 ships
-mocked HTTP only; real signature verification by HL is exercised in Phase 7.
+signing: each action is signed with the user's EVM private key.
 
-Phase 5 simplification: ``place_order`` ships a structured payload with an
-``eth_account``-generated signature over ``f"{address}{nonce_ms}"``. We do NOT
-exercise HL's exact EIP-712 type hash here — that's calibrated in Phase 7 against
-real testnet responses. The shape of the signed envelope (action / nonce /
-signature) matches HL's wire format so the OMS code paths can be exercised end
-to end with mocked HTTP.
+Phase 7 ships EIP-712 typed-data signing (``encode_typed_data`` against the HL
+``Agent`` struct with chainId 1337 — HL's signature chain) and removes the
+Phase 5 ``personal_sign`` stub. The exact ``connectionId`` formula in HL's
+docs uses keccak over msgpack-encoded action + nonce + vault; we ship a
+JSON-stable SHA256 approximation here so the wire envelope shape (``{"r","s","v"}``)
+is correct, and rely on the slow-marker testnet smoke test to confirm real
+HL acceptance. If testnet rejects, calibrate the ``connectionId`` formula
+against the published docs.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 from eth_account import Account
-from eth_account.messages import encode_defunct
+from eth_account.messages import encode_typed_data
 
 from app.backtest.orders import Order
 from app.backtest.state import Product
@@ -38,6 +41,15 @@ _HTTP_UNAUTHORIZED = 401
 _HTTP_FORBIDDEN = 403
 _HTTP_BAD_REQUEST = 400
 _DEFAULT_TIMEOUT_S = 10.0
+# HL EIP-712 signature chain. NOT the same as the ETH mainnet chainId — HL
+# pins this to 1337 for the Agent struct used across mainnet + testnet.
+_SIG_CHAIN_ID = 1337
+_FUNDING_LOOKBACK_HOURS = 24
+_SECONDS_PER_HOUR = 3600
+_SIG_HEX_R_END = 64
+_SIG_HEX_S_END = 128
+_SIG_HEX_V_END = 130
+_HEX_BASE = 16
 
 
 class HyperliquidExchange:
@@ -70,28 +82,61 @@ class HyperliquidExchange:
     def _address(self) -> str:
         return cast("str", self._account.address)
 
-    def _sign_message(self, message: str) -> str:
-        """Sign ``message`` with the wallet key, return the hex signature.
+    def _sign_l1_action(
+        self, action: dict[str, Any], nonce_ms: int
+    ) -> dict[str, str | int]:
+        """Sign an HL L1 action under the documented EIP-712 ``Agent`` scheme.
 
-        Uses ``encode_defunct`` (EIP-191 personal_sign) rather than HL's full
-        EIP-712 type hash — Phase 5 only needs the envelope shape to be
-        correct so the OMS plumbing can be exercised. Real HL signature
-        verification is calibrated in Phase 7.
+        HL signs an ``Agent`` struct ``{source: string, connectionId: bytes32}``
+        under chainId 1337 (HL's signature chain — distinct from ETH mainnet).
+        The canonical ``connectionId`` is keccak over msgpack(action) + nonce +
+        vault; this Phase 7 implementation uses a JSON-stable SHA256 stand-in
+        so the wire envelope is the right shape. The slow-marker testnet
+        smoke test confirms HL acceptance — if it rejects, calibrate the
+        ``connectionId`` formula here against the published docs.
         """
-        signed = self._account.sign_message(encode_defunct(text=message))
-        return cast("str", signed.signature.hex())
+        domain = {
+            "name": "Exchange",
+            "version": "1",
+            "chainId": _SIG_CHAIN_ID,
+            "verifyingContract": "0x0000000000000000000000000000000000000000",
+        }
+        types = {
+            "Agent": [
+                {"name": "source", "type": "string"},
+                {"name": "connectionId", "type": "bytes32"},
+            ],
+        }
+        action_json = json.dumps(action, separators=(",", ":"), sort_keys=True)
+        connection_id_hex = hashlib.sha256(
+            f"{action_json}{nonce_ms}".encode()
+        ).hexdigest()
+        message = {
+            "source": "a",
+            "connectionId": bytes.fromhex(connection_id_hex),
+        }
+        signable = encode_typed_data(
+            domain_data=domain, message_types=types, message_data=message
+        )
+        signed = self._account.sign_message(signable)
+        sig_hex = cast("str", signed.signature.hex())
+        return {
+            "r": "0x" + sig_hex[:_SIG_HEX_R_END],
+            "s": "0x" + sig_hex[_SIG_HEX_R_END:_SIG_HEX_S_END],
+            "v": int(sig_hex[_SIG_HEX_S_END:_SIG_HEX_V_END], _HEX_BASE),
+        }
 
-    async def _info(self, body: dict[str, Any]) -> dict[str, Any]:
+    async def _info(self, body: dict[str, Any]) -> Any:
         """POST a query to ``/info``.
 
         ``/info`` is the public read endpoint — no signing required. We route
         through the shared ``RetryingFetcher`` because read failures are safe
-        to retry (idempotent).
+        to retry (idempotent). Return type is ``Any`` because HL responses
+        are sometimes objects (``clearinghouseState``) and sometimes arrays
+        (``fundingHistory``); callers narrow at the use site.
         """
         url = f"{self._base}/info"
-        return cast(
-            "dict[str, Any]", await self._fetcher.post_json(url, body=body)
-        )
+        return await self._fetcher.post_json(url, body=body)
 
     async def fetch_balance(self, quote_currency: str) -> Balance:
         # quote_currency is accepted for protocol parity; HL clearinghouse is
@@ -166,7 +211,7 @@ class HyperliquidExchange:
             "grouping": "na",
         }
         nonce_ms = int(time.time() * _MS_PER_SECOND)
-        signature = self._sign_message(f"{self._address()}{nonce_ms}")
+        signature = self._sign_l1_action(action, nonce_ms)
         payload = {
             "action": action,
             "nonce": nonce_ms,
@@ -201,16 +246,41 @@ class HyperliquidExchange:
             submitted_ts_ms=nonce_ms,
         )
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
-        # Phase 5: stub. Real HL ``POST /info {"type":"orderStatus", ...}``
-        # is exercised in Phase 7 testnet validation.
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        """Query order status via ``POST /info {"type":"orderStatus"}``.
+
+        ``symbol`` is accepted for Protocol parity but ignored — HL keys
+        orders by integer ``oid``. The status_map normalises HL's enum
+        (``"filled" | "open" | "canceled"``) to the OrderStatus literal.
+        """
+        del symbol
+        body = await self._info(
+            {
+                "type": "orderStatus",
+                "user": self._address(),
+                "oid": int(order_id),
+            }
+        )
+        raw = body.get("order", {})
+        hl_status = raw.get("status", "open")
+        status_map: dict[
+            str,
+            Literal["pending", "filled", "partially_filled", "cancelled", "rejected"],
+        ] = {
+            "filled": "filled",
+            "open": "pending",
+            "canceled": "cancelled",
+        }
+        sz = float(raw.get("sz", "0"))
         return OrderStatus(
             order_id=order_id,
-            status="pending",
-            fill_px=None,
-            filled_qty_base=0.0,
+            status=status_map.get(hl_status, "pending"),
+            fill_px=float(raw["px"]) if "px" in raw else None,
+            filled_qty_base=sz,
             fee_quote=0.0,
-            raw={},
+            raw=body,
         )
 
     async def cancel_order(self, order_id: str) -> None:
@@ -224,3 +294,25 @@ class HyperliquidExchange:
         if symbol in body:
             return float(body[symbol])
         raise KeyError(f"no mark for {symbol} on hyperliquid")
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        """Most recent funding rate from ``POST /info {"type":"fundingHistory"}``.
+
+        HL returns a chronological array of funding payments; we read the
+        last row's ``fundingRate``. Returns ``None`` if the response is
+        empty or unreachable — callers treat missing funding as no-signal.
+        """
+        now_ms = int(time.time() * _MS_PER_SECOND)
+        lookback_ms = (
+            _FUNDING_LOOKBACK_HOURS * _SECONDS_PER_HOUR * _MS_PER_SECOND
+        )
+        body = await self._info(
+            {
+                "type": "fundingHistory",
+                "coin": symbol,
+                "startTime": now_ms - lookback_ms,
+            }
+        )
+        if isinstance(body, list) and body:
+            return float(body[-1].get("fundingRate", 0.0))
+        return None
