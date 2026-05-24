@@ -134,6 +134,54 @@ Result includes `total_return`, `sharpe`, `max_drawdown`, `num_trades`, and `equ
 
 Real strategies (Strategy A funding arb with calibration, Strategy B factor portfolio) ship in Phase 6+.
 
+## OMS + Exchange adapters (Phase 5)
+
+The OMS bridges `Strategy.evaluate()` output to live exchanges with the same
+profile-driven contract the backtest uses. Every dispatch is audit-logged with
+the active profile's `profile_hash` (Constraint #4).
+
+### Configured venues
+
+- `binance` — Binance spot + USDS-margined perp (HMAC signing)
+- `bybit` — Bybit V5 (HMAC signing)
+- `hyperliquid` — Hyperliquid perp (EVM-signed)
+
+Phase 5 ships **mocked HTTP only**. Real testnet integration is Phase 7.
+
+### API keys (env-only, never in DB)
+
+```bash
+export BINANCE_API_KEY=...
+export BINANCE_API_SECRET=...
+export BYBIT_API_KEY=...
+export BYBIT_API_SECRET=...
+export HYPERLIQUID_WALLET_PRIVATE_KEY=...
+```
+
+Phase 0 ops checklist covers key creation: withdrawals disabled, IP whitelist.
+
+### Kill switch
+
+```bash
+# Flip the active profile's kill switch (halts all OMS dispatches)
+curl -X POST http://localhost:8000/api/v1/oms/kill \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"manual halt"}'
+
+# Check status
+curl http://localhost:8000/api/v1/oms/status
+
+# Recent decisions
+curl http://localhost:8000/api/v1/decision-audit/recent
+```
+
+### Halt classes
+
+- `KillSwitchActive` — `oms.kill_switch_active` flag is set
+- `HedgeDriftHalt` — spot/perp position drift > `oms.hedge_drift_halt_pct` (default 5%)
+- `ReconciliationDriftHalt` — book vs exchange drift > `oms.reconcile_drift_halt_pct` (default 2%)
+- `UnconfiguredVenueError` — strategy emitted an order for a venue not in the OMS exchange map
+
 ## Layout
 
 ```

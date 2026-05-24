@@ -34,6 +34,8 @@ SCAN_TARGETS: list[pathlib.Path] = [
     REPO_ROOT / "backend" / "app" / "backtest" / "funding.py",
     REPO_ROOT / "backend" / "app" / "backtest" / "metrics.py",
     REPO_ROOT / "backend" / "app" / "backtest" / "strategies",
+    REPO_ROOT / "backend" / "app" / "oms",
+    REPO_ROOT / "backend" / "app" / "exchanges",
 ]
 
 

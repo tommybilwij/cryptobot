@@ -1,5 +1,21 @@
 # Changelog
 
+### v0.5.0 (2026-05-24)
+
+#### Features
+- Exchange adapter layer: uniform `Exchange` Protocol satisfied by `PaperExchange` (in-memory deterministic fills) + 3 REST adapters: `BinanceExchange` (HMAC), `BybitExchange` V5 (HMAC), `HyperliquidExchange` (EVM signing via eth_account)
+- Order Management System: `OMS.dispatch(orders, state, ...) → DispatchResult` with kill switch + venue validation + sequential order placement + fill polling + audit logging
+- Halt-class drift detection: `PositionReconciler` checks book vs exchange (default 2% threshold) + spot/perp hedge consistency (default 5%); halt classes `HedgeDriftHalt`, `ReconciliationDriftHalt`, `KillSwitchActive`, `UnconfiguredVenueError`
+- Decision audit: `DecisionAuditEntry` ORM + service (`log_decision`, `log_snapshot`, `get_recent`); audit-locked `profile_hash` (sha256 over canonical-JSON profile config) at dispatch time (Constraint #4)
+- Profile registry fourth dict `PROFILE_SCOPED_BOOL_DEFAULTS` alongside numeric/string/dict; `ProfileParams.get()` walks all four
+- New profile keys: `oms.kill_switch_active`, `oms.hedge_drift_halt_pct`, `oms.reconcile_drift_halt_pct`, `oms.fill_poll_interval_s`, `oms.max_fill_wait_s`, `oms.audit_snapshot_interval_s`, `exchanges.{venue}.use_testnet`, `exchanges.{venue}.timeout_s`
+- Settings exchange API key fields (env-only): `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `BYBIT_API_KEY`, `BYBIT_API_SECRET`, `HYPERLIQUID_WALLET_PRIVATE_KEY`
+- `RetryingFetcher` extended with `get_json` + `post_json` (alongside existing `get_bytes`)
+- `MultiVenueCashLedger` tracks USDC as a single logical pool across venues
+- Async API: `POST /api/v1/oms/kill` (flips kill switch on active profile + bumps version), `GET /api/v1/oms/status`, `GET /api/v1/decision-audit/recent` with filters
+- Alembic migration 0004: `decision_audit_entries` table with composite indexes on (strategy_name, ts) + (profile_hash, ts)
+- AST literal lint extended to `backend/app/oms/**` and `backend/app/exchanges/**`
+
 ### v0.4.0 (2026-05-24)
 
 #### Features

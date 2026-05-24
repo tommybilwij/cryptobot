@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.profile.defaults import (
+    PROFILE_SCOPED_BOOL_DEFAULTS,
     PROFILE_SCOPED_DEFAULTS,
     PROFILE_SCOPED_DICT_DEFAULTS,
     PROFILE_SCOPED_STRING_DEFAULTS,
@@ -27,7 +28,7 @@ class ProfileParams:
 
     Lookup order:
       1. Profile JSONB (nested via dotted path).
-      2. Registry default (numeric / string / dict).
+      2. Registry default (numeric / string / dict / bool).
       3. UnknownParamPath if path not in any registry.
     """
 
@@ -44,8 +45,11 @@ class ProfileParams:
             return PROFILE_SCOPED_STRING_DEFAULTS[path]
         if path in PROFILE_SCOPED_DICT_DEFAULTS:
             return PROFILE_SCOPED_DICT_DEFAULTS[path]
+        if path in PROFILE_SCOPED_BOOL_DEFAULTS:
+            return PROFILE_SCOPED_BOOL_DEFAULTS[path]
         raise UnknownParamPath(
-            f"path {path!r} is not in PROFILE_SCOPED_DEFAULTS, _STRING_, or _DICT_"
+            f"path {path!r} is not in PROFILE_SCOPED_DEFAULTS, _STRING_, "
+            f"_DICT_, or _BOOL_"
         )
 
     def keys(self) -> set[str]:
