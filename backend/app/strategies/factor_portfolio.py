@@ -1,27 +1,39 @@
 """FactorPortfolioStrategy — long top-decile (optionally short bottom-decile).
 
-Phase 15 ships the strategy. Feature pipelines (rolling vol, cross-sectional
-volume rank) are simplified for now; Phase 16+ wires real implementations.
+Phase 15 shipped the strategy with stub feature builders. HP3 wires in the
+real ``FeaturePipeline`` (momentum_30d, realized_vol, volume_rank, funding_yield)
+when one is injected; the legacy stub path stays in place for tests that build
+the strategy directly without a pipeline.
 
 Sizing per position: cash / target_count (equal weight).
 """
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from app.backtest.orders import Order
 from app.backtest.state import MarketState, Position
 from app.profile.params import ProfileParams
 from app.services.scoring import CompositeScore, ScoringEngine
 
+if TYPE_CHECKING:
+    from app.services.feature_pipeline import FeaturePipeline
+
 
 class FactorPortfolioStrategy:
     name = "factor_portfolio"
 
-    def __init__(self, *, venue: str, universe: list[str]) -> None:
+    def __init__(
+        self,
+        *,
+        venue: str,
+        universe: list[str],
+        feature_pipeline: FeaturePipeline | None = None,
+    ) -> None:
         self._venue = venue
         self._universe = universe
+        self._pipeline = feature_pipeline
 
     def evaluate(self, state: MarketState, params: ProfileParams) -> list[Order]:
         if not self._universe:
@@ -52,9 +64,18 @@ class FactorPortfolioStrategy:
         top_decile_pct = float(params.get("strategies.factor_portfolio.top_decile_pct"))
         shorts_enabled = float(params.get("strategies.factor_portfolio.shorts_enabled")) > 0.0
 
+        if self._pipeline is not None:
+            features_by_symbol = self._pipeline.compute_features(
+                venue=self._venue, universe=self._universe, state=state
+            )
+        else:
+            features_by_symbol = {
+                symbol: self._features(state, symbol, params) for symbol in self._universe
+            }
+
         scores: list[CompositeScore] = []
         for symbol in self._universe:
-            features = self._features(state, symbol, params)
+            features = features_by_symbol.get(symbol, {})
             scores.append(scoring.score(symbol=symbol, features=features))
         scores.sort(key=lambda s: s.total, reverse=True)
 
