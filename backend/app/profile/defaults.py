@@ -137,6 +137,9 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "live.snapshot_interval_s": 3600.0,
     "live.cold_start_grace_s": 300.0,
 
+    # ── Alerts (Phase 9) ────────────────────────────────────────────────
+    "alerts.timeout_s": 5.0,
+
     # ── Data health ─────────────────────────────────────────────────────
     "data_health.max_age_s.trades": 60,
     "data_health.max_age_s.klines": 120,
@@ -178,6 +181,9 @@ PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str] = {
     "exchanges.hyperliquid.base_url_mainnet": "https://api.hyperliquid.xyz",
     # ── Live runner (Phase 8) ────────────────────────────────────────────
     "live.venue": "binance",
+    # ── Alerts (Phase 9) ─────────────────────────────────────────────────
+    "alerts.webhook_url": "",
+    "alerts.heartbeat_severity": "info",
 }
 
 
@@ -254,6 +260,8 @@ PROFILE_SCOPED_BOOL_DEFAULTS: dict[str, bool] = {
     # ── Live runner (Phase 8) ────────────────────────────────────────────
     "live.enabled": False,
     "live.dry_run_mode": True,
+    # ── Alerts (Phase 9) ─────────────────────────────────────────────────
+    "alerts.send_heartbeats": False,
 }
 
 

@@ -25,6 +25,7 @@ from app.oms.service import OMS
 from app.profile.params import ProfileParams
 from app.risk.drawdown_brake import DrawdownBrake
 from app.risk.exceptions import DrawdownBrakeHalt
+from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
 from app.services.live_state_fetcher import LiveStateFetcher
 
@@ -37,6 +38,17 @@ _STATUS_NO_ORDERS = "no_orders"
 _STATUS_KILL_SWITCH = "kill_switch"
 _STATUS_OK = "ok"
 _STATUS_HALTED_DRAWDOWN_BRAKE = "halted_drawdown_brake"
+_STATUS_HALTED_HEDGE_DRIFT = "halted_hedge_drift"
+_STATUS_HALTED_BOOK_DRIFT = "halted_book_drift"
+
+_SEVERITY_CRITICAL = "critical"
+_SEVERITY_WARNING = "warning"
+
+_EVENT_DRAWDOWN_BRAKE = "DrawdownBrakeHalt"
+_EVENT_KILL_SWITCH = "KillSwitchActive"
+_EVENT_HEDGE_DRIFT = "HedgeDriftHalt"
+_EVENT_BOOK_DRIFT = "ReconciliationDriftHalt"
+_EVENT_HEARTBEAT = "heartbeat"
 
 
 class LiveRunner:
@@ -57,6 +69,7 @@ class LiveRunner:
         audit_service: DecisionAuditService,
         params: ProfileParams,
         drawdown_brake: DrawdownBrake,
+        alerter: Alerter,
         venue: str,
         symbols: list[str],
         profile_id: uuid.UUID,
@@ -69,6 +82,7 @@ class LiveRunner:
         self._audit = audit_service
         self._params = params
         self._brake = drawdown_brake
+        self._alerter = alerter
         self._fetcher = LiveStateFetcher(exchanges=exchanges, venue=venue)
         self._venue = venue
         self._symbols = symbols
@@ -107,6 +121,24 @@ class LiveRunner:
                 result_status = dispatch.reconciliation_status
             except KillSwitchActive:
                 result_status = _STATUS_KILL_SWITCH
+                await self._alerter.send(
+                    severity=_SEVERITY_CRITICAL,
+                    event=_EVENT_KILL_SWITCH,
+                    details={},
+                )
+        # OMS-reported reconciliation drift halts → warning alert.
+        if result_status == _STATUS_HALTED_HEDGE_DRIFT:
+            await self._alerter.send(
+                severity=_SEVERITY_WARNING,
+                event=_EVENT_HEDGE_DRIFT,
+                details={"strategy": self._strategy.name},
+            )
+        elif result_status == _STATUS_HALTED_BOOK_DRIFT:
+            await self._alerter.send(
+                severity=_SEVERITY_WARNING,
+                event=_EVENT_BOOK_DRIFT,
+                details={"strategy": self._strategy.name},
+            )
         # Drawdown brake — equity = cash + mark-to-market(positions).
         equity = state.cash_quote + self._mark_to_market(state)
         try:
@@ -116,9 +148,20 @@ class LiveRunner:
             await self._log_snapshot(
                 state, equity, _STATUS_HALTED_DRAWDOWN_BRAKE, str(e)
             )
+            await self._alerter.send(
+                severity=_SEVERITY_CRITICAL,
+                event=_EVENT_DRAWDOWN_BRAKE,
+                details={"equity": equity, "peak": self._brake.peak},
+            )
             raise
         # Periodic heartbeat snapshot to the audit log.
-        await self._maybe_log_snapshot(state, equity)
+        snapshot_logged = await self._maybe_log_snapshot(state, equity)
+        if snapshot_logged and bool(self._params.get("alerts.send_heartbeats")):
+            await self._alerter.send(
+                severity=str(self._params.get("alerts.heartbeat_severity")),
+                event=_EVENT_HEARTBEAT,
+                details={"equity": equity, "peak": self._brake.peak},
+            )
         return {
             "status": result_status,
             "equity": equity,
@@ -148,15 +191,22 @@ class LiveRunner:
 
     async def _maybe_log_snapshot(
         self, state: MarketState, equity: float
-    ) -> None:
+    ) -> bool:
+        """Log a heartbeat snapshot if the interval has elapsed.
+
+        Returns:
+            True if a snapshot was written this tick, False otherwise.
+            Callers use this to decide whether to fire a heartbeat alert.
+        """
         interval_ms = int(
             float(self._params.get("live.snapshot_interval_s")) * _MS_PER_SECOND
         )
         now_ms = int(time.time() * _MS_PER_SECOND)
         if now_ms - self._last_snapshot_ts_ms < interval_ms:
-            return
+            return False
         await self._log_snapshot(state, equity, _STATUS_OK, None)
         self._last_snapshot_ts_ms = now_ms
+        return True
 
     async def _log_snapshot(
         self,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -20,6 +21,7 @@ from app.oms.service import OMS
 from app.profile.params import ProfileParams
 from app.risk.drawdown_brake import DrawdownBrake
 from app.risk.exceptions import DrawdownBrakeHalt
+from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
 from app.services.live_runner import LiveRunner
 
@@ -53,7 +55,8 @@ def _build_runner(
     strategy: _StubStrategy,
     profile: StrategyProfile,
     initial_cash: float = 10_000.0,
-) -> tuple[LiveRunner, PaperExchange]:
+    alerter: Alerter | AsyncMock | None = None,
+) -> tuple[LiveRunner, PaperExchange, AsyncMock]:
     paper = PaperExchange(
         venue="binance", params=params, initial_cash=initial_cash
     )
@@ -68,6 +71,9 @@ def _build_runner(
         reconciler=PositionReconciler(params=params),
         ledger=MultiVenueCashLedger(),
     )
+    # AsyncMock(spec=Alerter) keeps test isolation tight — every test gets a
+    # fresh mock so call counts don't leak across cases.
+    resolved_alerter = alerter if alerter is not None else AsyncMock(spec=Alerter)
     runner = LiveRunner(
         exchanges=exchanges,
         strategy=strategy,
@@ -75,13 +81,14 @@ def _build_runner(
         audit_service=DecisionAuditService(db_session),
         params=params,
         drawdown_brake=DrawdownBrake(params=params),
+        alerter=resolved_alerter,
         venue="binance",
         symbols=["BTCUSDT"],
         profile_id=profile.id,
         profile_version=profile.version,
         profile_hash="abc",
     )
-    return runner, paper
+    return runner, paper, resolved_alerter
 
 
 @pytest.mark.asyncio
@@ -89,7 +96,7 @@ async def test_skips_when_disabled(db_session: AsyncSession) -> None:
     profile = await _make_profile(db_session)
     # live.enabled defaults to False → tick is a no-op.
     params = ProfileParams(profile={})
-    runner, _ = _build_runner(
+    runner, _, _ = _build_runner(
         db_session=db_session,
         params=params,
         strategy=_StubStrategy([]),
@@ -117,7 +124,7 @@ async def test_dispatches_when_strategy_emits_orders(
             side="sell", qty_base=0.01, order_type="market",
         ),
     ]
-    runner, _ = _build_runner(
+    runner, _, _ = _build_runner(
         db_session=db_session,
         params=params,
         strategy=_StubStrategy(orders),
@@ -144,7 +151,7 @@ async def test_dispatches_when_strategy_emits_orders(
 async def test_skips_dispatch_when_no_orders(db_session: AsyncSession) -> None:
     profile = await _make_profile(db_session)
     params = ProfileParams(profile={"live": {"enabled": True}})
-    runner, _ = _build_runner(
+    runner, _, _ = _build_runner(
         db_session=db_session,
         params=params,
         strategy=_StubStrategy([]),
@@ -180,7 +187,7 @@ async def test_halts_on_drawdown_brake(db_session: AsyncSession) -> None:
             },
         }
     )
-    runner, _ = _build_runner(
+    runner, _, _ = _build_runner(
         db_session=db_session,
         params=params,
         strategy=_StubStrategy([]),
@@ -212,7 +219,7 @@ async def test_logs_snapshot_after_interval(db_session: AsyncSession) -> None:
             "live": {"enabled": True, "snapshot_interval_s": 0.0},
         }
     )
-    runner, _ = _build_runner(
+    runner, _, _ = _build_runner(
         db_session=db_session,
         params=params,
         strategy=_StubStrategy([]),
@@ -230,3 +237,45 @@ async def test_logs_snapshot_after_interval(db_session: AsyncSession) -> None:
     ).scalars().all()
     assert len(snapshot_rows) >= 1
     assert snapshot_rows[0].input_state["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_runner_alerts_on_drawdown_brake(db_session: AsyncSession) -> None:
+    """When the drawdown brake fires, Alerter.send is called with critical+event."""
+    profile = await _make_profile(db_session)
+    # Same fixture as test_halts_on_drawdown_brake — 20% drawdown trips the
+    # 5% trigger; the runner must alert before re-raising.
+    params = ProfileParams(
+        profile={
+            "live": {"enabled": True},
+            "risk": {
+                "drawdown_brake": {
+                    "peak_equity": 10_000.0,
+                    "trigger_pct": 0.05,
+                }
+            },
+        }
+    )
+    alerter = AsyncMock(spec=Alerter)
+    runner, _, _ = _build_runner(
+        db_session=db_session,
+        params=params,
+        strategy=_StubStrategy([]),
+        profile=profile,
+        initial_cash=8_000.0,
+        alerter=alerter,
+    )
+
+    with pytest.raises(DrawdownBrakeHalt):
+        await runner.run_one_tick()
+
+    # At least one alerter.send call with the documented severity + event.
+    assert alerter.send.await_count >= 1
+    critical_calls = [
+        c for c in alerter.send.await_args_list
+        if c.kwargs.get("severity") == "critical"
+        and c.kwargs.get("event") == "DrawdownBrakeHalt"
+    ]
+    assert len(critical_calls) == 1
+    assert "equity" in critical_calls[0].kwargs["details"]
+    assert "peak" in critical_calls[0].kwargs["details"]
