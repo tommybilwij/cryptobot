@@ -270,3 +270,34 @@ def test_live_venue_string_default() -> None:
 
     assert PROFILE_SCOPED_STRING_DEFAULTS["live.venue"] == "binance"
     assert isinstance(PROFILE_SCOPED_STRING_DEFAULTS["live.venue"], str)
+
+
+def test_alerts_timeout_s_default() -> None:
+    """Phase 9: alerts.timeout_s = 5.0 (float)."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["alerts.timeout_s"] == 5.0
+    assert isinstance(PROFILE_SCOPED_DEFAULTS["alerts.timeout_s"], float)
+
+
+def test_alerts_webhook_url_default_empty() -> None:
+    """Phase 9: alerts.webhook_url defaults to '' (no-op alerter)."""
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
+    assert PROFILE_SCOPED_STRING_DEFAULTS["alerts.webhook_url"] == ""
+    assert isinstance(PROFILE_SCOPED_STRING_DEFAULTS["alerts.webhook_url"], str)
+
+
+def test_alerts_heartbeat_severity_default() -> None:
+    """Phase 9: alerts.heartbeat_severity = 'info'."""
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
+    assert PROFILE_SCOPED_STRING_DEFAULTS["alerts.heartbeat_severity"] == "info"
+    assert isinstance(PROFILE_SCOPED_STRING_DEFAULTS["alerts.heartbeat_severity"], str)
+
+
+def test_alerts_send_heartbeats_default_false() -> None:
+    """Phase 9: default-safe alerts.send_heartbeats = False (no chatty webhook)."""
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    assert PROFILE_SCOPED_BOOL_DEFAULTS["alerts.send_heartbeats"] is False
