@@ -1,5 +1,15 @@
 # Changelog
 
+### v1.8.0 (2026-05-24) — Hardening Pass 9: frontend polish
+
+#### Features
+- Prettier config (`frontend/.prettierrc`, `frontend/.prettierignore`) — unblocks the dev-toolkit-react-tailwind pre-commit gate on TSX commits. Adds `format` / `format:check` scripts to `package.json`
+- Vitest scaffold (`frontend/vitest.config.ts`, `frontend/vitest.setup.ts`) — jsdom environment, `@`-alias resolution mirroring the Next.js setup, jest-dom matchers via setup file. Adds `test` / `test:ui` scripts and devDependencies for vitest + @testing-library/react + jsdom
+- Three starter tests: `Sparkline.test.tsx` covers the "not enough data" placeholder and the SVG polyline render; `api.test.ts` covers the apiGet base-URL prefix + JSON path
+- Profile editor at `/profiles/[id]/edit` — JSON textarea + Save button that POSTs to `/api/v1/strategy-profiles/<id>/apply`. Cancels back to `/profiles`. `/profiles` list gains an `edit` link per row
+- Equity drilldown at `/live/ticks` — polls `/api/v1/decision-audit/recent?decision_type=snapshot&limit=200` every 5s and renders one line per snapshot (ts, equity, cash, peak, reconciliation status). `/live` page links to it via "view tick history"
+- No backend changes; 335 tests still pass
+
 ### v1.5.0 (2026-05-24) — Hardening Pass 6: frontend pages wired up
 
 #### Features
