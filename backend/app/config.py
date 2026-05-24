@@ -44,5 +44,7 @@ class Settings(BaseSettings):
     bybit_api_secret_funding_arb: str = ""
     hyperliquid_wallet_private_key_funding_arb: str = ""
 
+    anthropic_api_key: str = ""
+
 
 settings = Settings()

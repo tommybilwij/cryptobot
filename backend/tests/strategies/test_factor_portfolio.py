@@ -29,10 +29,7 @@ def _snap(symbols_with_funding: dict[str, float]) -> MarketSnapshot:
     bars: dict[tuple[str, str, str], Bar] = {}
     for symbol in symbols_with_funding:
         bars[("binance", symbol, "spot")] = _bar(symbol, 100.0)
-    funding_rates = {
-        ("binance", symbol): rate
-        for symbol, rate in symbols_with_funding.items()
-    }
+    funding_rates = {("binance", symbol): rate for symbol, rate in symbols_with_funding.items()}
     return MarketSnapshot(ts_ms=1, bars=bars, funding_rates=funding_rates)  # type: ignore[arg-type]
 
 
@@ -83,9 +80,7 @@ def test_skips_symbols_without_bars() -> None:
     universe = ["AAA"]
     s = FactorPortfolioStrategy(venue="binance", universe=universe)
     state = MarketState(
-        snapshot=MarketSnapshot(
-            ts_ms=1, bars={}, funding_rates={("binance", "AAA"): 0.001}
-        ),
+        snapshot=MarketSnapshot(ts_ms=1, bars={}, funding_rates={("binance", "AAA"): 0.001}),
         positions=(),
         cash_quote=10_000.0,
     )

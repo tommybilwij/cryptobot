@@ -96,6 +96,7 @@ def test_negative_total_returns_skip_bucket() -> None:
 
 def test_graveyard_skips_buried_component() -> None:
     from app.risk.component_graveyard import ComponentGraveyard
+
     g = ComponentGraveyard()
     g.add("momentum_30d", reason="test")
     e = ScoringEngine(params=ProfileParams(profile={}), graveyard=g)

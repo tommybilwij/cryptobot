@@ -36,9 +36,7 @@ class FactorPortfolioStrategy:
         orders.extend(self._close_orders(state.positions, current_longs - target_longs))
         orders.extend(self._close_orders(state.positions, current_shorts - target_shorts))
 
-        cash_per_position = (
-            state.cash_quote / target_count if target_count > 0 else 0.0
-        )
+        cash_per_position = state.cash_quote / target_count if target_count > 0 else 0.0
         orders.extend(
             self._open_orders(state, target_longs - current_longs, cash_per_position, "buy")
         )
@@ -52,9 +50,7 @@ class FactorPortfolioStrategy:
     ) -> tuple[set[str], set[str], int]:
         scoring = ScoringEngine(params=params)
         top_decile_pct = float(params.get("strategies.factor_portfolio.top_decile_pct"))
-        shorts_enabled = (
-            float(params.get("strategies.factor_portfolio.shorts_enabled")) > 0.0
-        )
+        shorts_enabled = float(params.get("strategies.factor_portfolio.shorts_enabled")) > 0.0
 
         scores: list[CompositeScore] = []
         for symbol in self._universe:
@@ -66,16 +62,12 @@ class FactorPortfolioStrategy:
         target_longs = {s.symbol for s in scores[:target_count]}
         target_shorts: set[str] = set()
         if shorts_enabled:
-            bottom_decile_pct = float(
-                params.get("strategies.factor_portfolio.bottom_decile_pct")
-            )
+            bottom_decile_pct = float(params.get("strategies.factor_portfolio.bottom_decile_pct"))
             short_count = max(1, int(len(self._universe) * bottom_decile_pct))
             target_shorts = {s.symbol for s in scores[-short_count:]}
         return target_longs, target_shorts, target_count
 
-    def _current_symbols(
-        self, positions: tuple[Position, ...], *, sign: int
-    ) -> set[str]:
+    def _current_symbols(self, positions: tuple[Position, ...], *, sign: int) -> set[str]:
         """Symbols of spot positions whose qty_base has the requested sign."""
         result: set[str] = set()
         for p in positions:
@@ -87,9 +79,7 @@ class FactorPortfolioStrategy:
                 result.add(p.symbol)
         return result
 
-    def _close_orders(
-        self, positions: tuple[Position, ...], symbols: set[str]
-    ) -> list[Order]:
+    def _close_orders(self, positions: tuple[Position, ...], symbols: set[str]) -> list[Order]:
         orders: list[Order] = []
         for symbol in symbols:
             pos = self._find_position(positions, symbol, "spot")
@@ -123,9 +113,7 @@ class FactorPortfolioStrategy:
                 )
         return orders
 
-    def _features(
-        self, state: MarketState, symbol: str, params: ProfileParams
-    ) -> dict[str, float]:
+    def _features(self, state: MarketState, symbol: str, params: ProfileParams) -> dict[str, float]:
         """Build feature dict for one symbol from the market state.
 
         Phase 15 simplification: only ``funding_yield`` is wired to real data.
@@ -135,9 +123,7 @@ class FactorPortfolioStrategy:
         features: dict[str, float] = {}
         funding = state.snapshot.funding_rates.get((self._venue, symbol))
         if funding is not None:
-            intervals_per_year = float(
-                params.get("strategies.funding_arb.intervals_per_year")
-            )
+            intervals_per_year = float(params.get("strategies.funding_arb.intervals_per_year"))
             features["funding_yield"] = funding * intervals_per_year
         return features
 
