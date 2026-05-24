@@ -1,5 +1,17 @@
 # Changelog
 
+### v0.8.0 (2026-05-24)
+
+#### Features
+- `LiveRunner` service in `backend/app/services/live_runner.py` — continuous tick loop tying LiveStateFetcher + FundingArbStrategy + OMS together with hourly snapshot logging
+- `DrawdownBrake` in `backend/app/risk/drawdown_brake.py` — halts trading when equity drops > `risk.drawdown_brake.trigger_pct` (default 5%) from rolling peak
+- `WORKER_JOB=live_trade` worker job + `worker-live-trade` docker-compose service (`profiles: ["live"]`) + `just live-trade` recipe
+- `GET /api/v1/live/status` reports `enabled`, `dry_run_mode`, last tick, equity, peak, drawdown_pct
+- `POST /api/v1/live/stop` flips `live.enabled=False` on active profile (bumps version)
+- 7 new registry keys: 3 numeric (`live.tick_interval_s`, `live.snapshot_interval_s`, `live.cold_start_grace_s`), 2 bool (`live.enabled=False`, `live.dry_run_mode=True`), 1 string (`live.venue`), 1 numeric (`risk.drawdown_brake.peak_equity`)
+- Safe-by-default: `live.enabled=False` + `live.dry_run_mode=True` baked in; firing the worker without flipping flags = no-op
+- 14 new tests (5 drawdown brake + 5 live runner + 1 worker dispatch + 3 API)
+
 ### v0.7.0 (2026-05-24)
 
 #### Features

@@ -55,3 +55,11 @@ async def test_run_backtest_requires_backtest_id_env(
 
     with pytest.raises(KeyError, match="BACKTEST_ID"):
         await run()
+
+
+@pytest.mark.asyncio
+async def test_live_trade_dispatches() -> None:
+    from app.worker.main import _resolve_job
+
+    job = _resolve_job("live_trade")
+    assert callable(job)
