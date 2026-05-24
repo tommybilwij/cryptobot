@@ -183,3 +183,20 @@ def test_profile_params_bool_override() -> None:
 
     p = ProfileParams(profile={"oms": {"kill_switch_active": True}})
     assert p.get("oms.kill_switch_active") is True
+
+
+def test_funding_arb_thresholds_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["funding_arb.entry_bps_per_8h"] == 5.0
+    assert PROFILE_SCOPED_DEFAULTS["funding_arb.exit_bps_per_8h"] == 1.0
+    assert PROFILE_SCOPED_DEFAULTS["funding_arb.max_notional_usdc"] == 5_000.0
+    assert PROFILE_SCOPED_DEFAULTS["funding_arb.max_cash_fraction"] == 0.5
+    assert PROFILE_SCOPED_DEFAULTS["funding_arb.intervals_per_year"] == 1095.75
+
+
+def test_funding_arb_string_defaults_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
+    assert PROFILE_SCOPED_STRING_DEFAULTS["funding_arb.default_venue"] == "binance"
+    assert PROFILE_SCOPED_STRING_DEFAULTS["funding_arb.default_symbol"] == "BTCUSDT"
