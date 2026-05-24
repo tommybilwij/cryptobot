@@ -59,6 +59,10 @@ mig-up:
 mig-new MESSAGE:
     cd backend && uv run alembic revision --autogenerate -m "{{MESSAGE}}"
 
+# Print Alembic migration history
+mig-history:
+    cd backend && uv run alembic history --verbose
+
 # Run the API server in dev (auto-reload)
 api:
     cd backend && uv run fastapi dev app/main.py
