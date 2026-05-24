@@ -10,7 +10,7 @@ npm install
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3002.
 
 ## Pages
 
@@ -23,5 +23,5 @@ Open http://localhost:3000.
 
 ## CORS
 
-If the backend doesn't allow `http://localhost:3000`, add CORS middleware in
+If the backend doesn't allow `http://localhost:3002`, add CORS middleware in
 `backend/app/main.py`. Phase 19 leaves this as an ops setup step.
