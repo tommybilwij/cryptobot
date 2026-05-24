@@ -5,6 +5,7 @@ import ast
 import pathlib
 
 from app.profile.defaults import (
+    PROFILE_SCOPED_BOOL_DEFAULTS,
     PROFILE_SCOPED_DEFAULTS,
     PROFILE_SCOPED_DICT_DEFAULTS,
     PROFILE_SCOPED_STRING_DEFAULTS,
@@ -20,17 +21,22 @@ def test_no_key_appears_in_more_than_one_registry() -> None:
     numeric = set(PROFILE_SCOPED_DEFAULTS)
     string = set(PROFILE_SCOPED_STRING_DEFAULTS)
     dictv = set(PROFILE_SCOPED_DICT_DEFAULTS)
+    boolv = set(PROFILE_SCOPED_BOOL_DEFAULTS)
     assert numeric & string == set(), "key in both numeric + string registries"
     assert numeric & dictv == set(), "key in both numeric + dict registries"
+    assert numeric & boolv == set(), "key in both numeric + bool registries"
     assert string & dictv == set(), "key in both string + dict registries"
+    assert string & boolv == set(), "key in both string + bool registries"
+    assert dictv & boolv == set(), "key in both dict + bool registries"
 
 
 def test_all_profile_keys_is_union() -> None:
-    """all_profile_keys() returns the union of the three registries."""
+    """all_profile_keys() returns the union of the four registries."""
     expected = (
         set(PROFILE_SCOPED_DEFAULTS)
         | set(PROFILE_SCOPED_STRING_DEFAULTS)
         | set(PROFILE_SCOPED_DICT_DEFAULTS)
+        | set(PROFILE_SCOPED_BOOL_DEFAULTS)
     )
     assert all_profile_keys() == expected
 
@@ -127,3 +133,53 @@ def test_backtest_keys_present() -> None:
 def test_funding_arb_skeleton_fraction_key_present() -> None:
     from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
     assert PROFILE_SCOPED_DEFAULTS["backtest.funding_arb_skeleton.hedge_size_fraction"] == 0.5
+
+
+def test_bool_defaults_registry_exists() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    assert isinstance(PROFILE_SCOPED_BOOL_DEFAULTS, dict)
+
+
+def test_oms_kill_switch_default_false() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    assert PROFILE_SCOPED_BOOL_DEFAULTS["oms.kill_switch_active"] is False
+
+
+def test_oms_drift_thresholds_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["oms.hedge_drift_halt_pct"] == 0.05
+    assert PROFILE_SCOPED_DEFAULTS["oms.reconcile_drift_halt_pct"] == 0.02
+    assert PROFILE_SCOPED_DEFAULTS["oms.fill_poll_interval_s"] == 1.0
+    assert PROFILE_SCOPED_DEFAULTS["oms.max_fill_wait_s"] == 30.0
+    assert PROFILE_SCOPED_DEFAULTS["oms.audit_snapshot_interval_s"] == 3600
+
+
+def test_exchange_testnet_defaults_true() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    for venue in ("binance", "bybit", "hyperliquid"):
+        assert PROFILE_SCOPED_BOOL_DEFAULTS[f"exchanges.{venue}.use_testnet"] is True
+
+
+def test_exchange_timeout_defaults_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    for venue in ("binance", "bybit", "hyperliquid"):
+        assert PROFILE_SCOPED_DEFAULTS[f"exchanges.{venue}.timeout_s"] == 10.0
+
+
+def test_profile_params_resolves_bool_default() -> None:
+    from app.profile.params import ProfileParams
+
+    p = ProfileParams(profile={})
+    assert p.get("oms.kill_switch_active") is False
+
+
+def test_profile_params_bool_override() -> None:
+    from app.profile.params import ProfileParams
+
+    p = ProfileParams(profile={"oms": {"kill_switch_active": True}})
+    assert p.get("oms.kill_switch_active") is True

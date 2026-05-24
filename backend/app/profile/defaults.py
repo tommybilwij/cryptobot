@@ -1,11 +1,19 @@
 """Single source of truth for profile-scoped keys + safe defaults.
 
-Constraint #1: every numeric / string / dict value a strategy reads must be
-listed here. Constraint #3: applying a profile walks this registry; any key
-absent from the new profile resets to its default (leak-gap prevention).
+Constraint #1: every numeric / string / dict / bool value a strategy or
+service reads must be listed here. Constraint #3: applying a profile walks
+this registry; any key absent from the new profile resets to its default
+(leak-gap prevention).
 
-Booleans are stored as 0.0 / 1.0 floats in PROFILE_SCOPED_DEFAULTS to keep
-the JSONB shape uniform with stockbot's pattern.
+Four typed registries:
+  * PROFILE_SCOPED_DEFAULTS         — numeric (int/float)
+  * PROFILE_SCOPED_STRING_DEFAULTS  — string/enum
+  * PROFILE_SCOPED_DICT_DEFAULTS    — nested dict (weights, caps, etc.)
+  * PROFILE_SCOPED_BOOL_DEFAULTS    — boolean (kill switches, testnet flags)
+
+Some legacy strategy-level boolean knobs still live in PROFILE_SCOPED_DEFAULTS
+as 0.0 / 1.0 floats (mirroring stockbot). New boolean keys belong in the
+BOOL registry so `params.get(...)` returns a real `bool`.
 """
 from __future__ import annotations
 
@@ -92,6 +100,18 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "execution.fee_bps.binance.perp": 4.0,
     "execution.fee_bps.bybit.perp": 5.5,
     "execution.fee_bps.hyperliquid.perp": 3.5,
+
+    # ── OMS thresholds + cadence ─────────────────────────────────────────
+    "oms.hedge_drift_halt_pct": 0.05,
+    "oms.reconcile_drift_halt_pct": 0.02,
+    "oms.fill_poll_interval_s": 1.0,
+    "oms.max_fill_wait_s": 30.0,
+    "oms.audit_snapshot_interval_s": 3600,
+
+    # ── Exchange timeouts ────────────────────────────────────────────────
+    "exchanges.binance.timeout_s": 10.0,
+    "exchanges.bybit.timeout_s": 10.0,
+    "exchanges.hyperliquid.timeout_s": 10.0,
 
     # ── Backtest assumptions ────────────────────────────────────────────
     "backtest.starting_capital_usd": 10000,
@@ -196,10 +216,26 @@ PROFILE_SCOPED_DICT_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 
+# ── PROFILE_SCOPED_BOOL_DEFAULTS ────────────────────────────────────────
+# Boolean profile keys with their safe defaults. Kept distinct from the
+# numeric registry so `params.get(...)` returns a real `bool` (not 1.0/0.0)
+# for kill-switch / testnet flags where the type matters at call sites.
+
+PROFILE_SCOPED_BOOL_DEFAULTS: dict[str, bool] = {
+    # ── OMS kill switch ──────────────────────────────────────────────────
+    "oms.kill_switch_active": False,
+    # ── Per-venue testnet/mainnet toggle ─────────────────────────────────
+    "exchanges.binance.use_testnet": True,
+    "exchanges.bybit.use_testnet": True,
+    "exchanges.hyperliquid.use_testnet": True,
+}
+
+
 def all_profile_keys() -> set[str]:
-    """Return every key registered across all three typed registries."""
+    """Return every key registered across all four typed registries."""
     return (
         set(PROFILE_SCOPED_DEFAULTS)
         | set(PROFILE_SCOPED_STRING_DEFAULTS)
         | set(PROFILE_SCOPED_DICT_DEFAULTS)
+        | set(PROFILE_SCOPED_BOOL_DEFAULTS)
     )

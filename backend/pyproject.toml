@@ -16,6 +16,7 @@ dependencies = [
     "duckdb>=1.0",
     "aiofiles>=24.0",
     "pyarrow>=24.0.0",
+    "eth-account>=0.13",
 ]
 
 [dependency-groups]
