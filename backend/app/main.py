@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     backtests,
@@ -17,6 +18,13 @@ from app.api import (
 from app.deps import lifespan
 
 app = FastAPI(title="cryptobot", version="0.18.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(health.router)
 app.include_router(strategy_profiles.router)
 app.include_router(data_health.router)
