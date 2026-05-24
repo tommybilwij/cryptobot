@@ -104,6 +104,7 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     # ── Backtest harness ─────────────────────────────────────────────────
     "backtest.initial_cash_quote_usdc": 10_000.0,
     "backtest.bar_interval_s": 60,
+    "backtest.funding_arb_skeleton.hedge_size_fraction": 0.5,
     "metrics.minutes_per_year": 525_600,
 
     # ── Data health ─────────────────────────────────────────────────────

@@ -122,3 +122,8 @@ def test_backtest_keys_present() -> None:
     assert PROFILE_SCOPED_DEFAULTS["backtest.initial_cash_quote_usdc"] == 10_000.0
     assert PROFILE_SCOPED_DEFAULTS["backtest.bar_interval_s"] == 60
     assert PROFILE_SCOPED_DEFAULTS["metrics.minutes_per_year"] == 525_600
+
+
+def test_funding_arb_skeleton_fraction_key_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+    assert PROFILE_SCOPED_DEFAULTS["backtest.funding_arb_skeleton.hedge_size_fraction"] == 0.5
