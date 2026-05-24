@@ -35,17 +35,13 @@ class BacktestLoader:
         frames: dict[tuple[str, str, Product], pl.DataFrame] = {}
         for symbol in symbols:
             for product in products:
-                df = self._query.klines(
-                    exchange=venue, symbol=symbol, start=start, end=end
-                )
+                df = self._query.klines(exchange=venue, symbol=symbol, start=start, end=end)
                 if df.height == 0:
                     continue
                 frames[(venue, symbol, product)] = df
 
         if not frames:
-            raise BacktestDataError(
-                f"no data for {venue} {symbols} {products} in [{start}, {end}]"
-            )
+            raise BacktestDataError(f"no data for {venue} {symbols} {products} in [{start}, {end}]")
 
         # Preload funding rates per (venue, symbol), indexed by ts_ms.
         # We index by ts_ms so per-tick lookup is O(1) — funding events are
@@ -87,9 +83,7 @@ class BacktestLoader:
                 if rate is not None:
                     funding_rates[vs_key] = rate
 
-            yield MarketSnapshot(
-                ts_ms=ts_ms, bars=bars, funding_rates=funding_rates
-            )
+            yield MarketSnapshot(ts_ms=ts_ms, bars=bars, funding_rates=funding_rates)
 
     def load_funding(
         self,
@@ -100,9 +94,7 @@ class BacktestLoader:
         end: datetime,
     ) -> pl.DataFrame | None:
         try:
-            df = self._query.funding_rates(
-                exchange=venue, symbol=symbol, start=start, end=end
-            )
+            df = self._query.funding_rates(exchange=venue, symbol=symbol, start=start, end=end)
         except Exception:
             return None
         if df.height == 0:
@@ -125,15 +117,11 @@ class BacktestLoader:
         """
         funding_index: dict[tuple[str, str], dict[int, float]] = {}
         for symbol in symbols:
-            fdf = self.load_funding(
-                venue=venue, symbol=symbol, start=start, end=end
-            )
+            fdf = self.load_funding(venue=venue, symbol=symbol, start=start, end=end)
             if fdf is None:
                 continue
             ts_to_rate: dict[int, float] = {}
             for funding_row in fdf.iter_rows(named=True):
-                ts_to_rate[int(funding_row["ts_ms"])] = float(
-                    funding_row["realized"]
-                )
+                ts_to_rate[int(funding_row["ts_ms"])] = float(funding_row["realized"])
             funding_index[(venue, symbol)] = ts_to_rate
         return funding_index

@@ -42,21 +42,15 @@ def _canonical_profile_hash(config: dict[str, Any]) -> str:
     ).hexdigest()
 
 
-@router.post(
-    "", response_model=BacktestResponse, status_code=status.HTTP_202_ACCEPTED
-)
-async def create_backtest(
-    body: CreateBacktestRequest, db: DbSession
-) -> BacktestResponse:
+@router.post("", response_model=BacktestResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_backtest(body: CreateBacktestRequest, db: DbSession) -> BacktestResponse:
     # 1. Validate profile exists.
     p_result = await db.execute(
         select(StrategyProfile).where(StrategyProfile.id == body.profile_id)
     )
     profile = p_result.scalar_one_or_none()
     if profile is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown profile_id"
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown profile_id")
 
     # 2. Validate strategy name against registry.
     registry = StrategyRegistry.default()
@@ -112,6 +106,4 @@ async def list_backtests(
         stmt = stmt.where(BacktestRun.status == status_filter)
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
-    return [
-        BacktestResponse.model_validate(r, from_attributes=True) for r in rows
-    ]
+    return [BacktestResponse.model_validate(r, from_attributes=True) for r in rows]

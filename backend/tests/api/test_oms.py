@@ -23,9 +23,7 @@ async def test_status_returns_kill_switch_false_by_default(
 
 
 @pytest.mark.asyncio
-async def test_post_kill_flips_flag(
-    async_client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_post_kill_flips_flag(async_client: AsyncClient, db_session: AsyncSession) -> None:
     p = StrategyProfile(name="oms-kill", version=1, is_active=True, config={})
     db_session.add(p)
     await db_session.flush()

@@ -1,4 +1,5 @@
 """Tests for profile registry self-consistency."""
+
 from __future__ import annotations
 
 import ast
@@ -44,9 +45,7 @@ def test_all_profile_keys_is_union() -> None:
 def test_numeric_defaults_are_numeric() -> None:
     """PROFILE_SCOPED_DEFAULTS values must be int or float."""
     for key, value in PROFILE_SCOPED_DEFAULTS.items():
-        assert isinstance(value, (int, float)), (
-            f"non-numeric default for {key}: {value!r}"
-        )
+        assert isinstance(value, (int, float)), f"non-numeric default for {key}: {value!r}"
 
 
 def test_string_defaults_are_strings() -> None:
@@ -65,9 +64,7 @@ def test_dotted_paths_are_valid_identifiers() -> None:
     """Every dotted path segment must be a valid identifier — no spaces / hyphens."""
     for key in all_profile_keys():
         for segment in key.split("."):
-            assert segment.isidentifier(), (
-                f"non-identifier segment {segment!r} in path {key!r}"
-            )
+            assert segment.isidentifier(), f"non-identifier segment {segment!r} in path {key!r}"
 
 
 def _collect_params_get_paths(py_file: pathlib.Path) -> list[str]:
@@ -94,9 +91,7 @@ def test_every_params_get_path_is_in_registry() -> None:
         if py_file.name == "base.py":
             continue
         for path in _collect_params_get_paths(py_file):
-            assert path in registered, (
-                f"{py_file}: params.get({path!r}) but path not in registry"
-            )
+            assert path in registered, f"{py_file}: params.get({path!r}) but path not in registry"
 
 
 def test_execution_slippage_keys_present() -> None:
@@ -132,6 +127,7 @@ def test_backtest_keys_present() -> None:
 
 def test_funding_arb_skeleton_fraction_key_present() -> None:
     from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
     assert PROFILE_SCOPED_DEFAULTS["backtest.funding_arb_skeleton.hedge_size_fraction"] == 0.5
 
 
@@ -205,6 +201,7 @@ def test_funding_arb_string_defaults_present() -> None:
 
 def test_exchange_url_defaults_present() -> None:
     from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
     expected = [
         "exchanges.binance.spot_base_url_testnet",
         "exchanges.binance.perp_base_url_testnet",
@@ -301,3 +298,11 @@ def test_alerts_send_heartbeats_default_false() -> None:
     from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
 
     assert PROFILE_SCOPED_BOOL_DEFAULTS["alerts.send_heartbeats"] is False
+
+
+def test_scoring_component_keys_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    for comp in ("momentum_30d", "funding_yield", "realized_vol", "volume_rank"):
+        assert f"strategies.factor_portfolio.scoring.{comp}.max_score" in PROFILE_SCOPED_DEFAULTS
+        assert f"strategies.factor_portfolio.scoring.{comp}.weight" in PROFILE_SCOPED_DEFAULTS

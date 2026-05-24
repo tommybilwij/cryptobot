@@ -127,9 +127,7 @@ async def test_factory_unknown_venue_raises() -> None:
 async def test_factory_testnet_vs_mainnet_url() -> None:
     """Flipping exchanges.binance.use_testnet picks the mainnet URL."""
     # Mainnet: use_testnet=False → spot_base_url_mainnet
-    mainnet_params = ProfileParams(
-        profile={"exchanges": {"binance": {"use_testnet": False}}}
-    )
+    mainnet_params = ProfileParams(profile={"exchanges": {"binance": {"use_testnet": False}}})
     settings = _settings(binance_api_key="x", binance_api_secret="y")
 
     async with AsyncClient(transport=MockTransport(_noop_handler)) as client:

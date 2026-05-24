@@ -1,4 +1,5 @@
 """HTTP API for managing strategy profiles."""
+
 from __future__ import annotations
 
 import uuid
@@ -36,9 +37,7 @@ class ProfileResponse(BaseModel):
 
 
 @router.post("", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED)
-async def create_profile(
-    req: ProfileCreateRequest, db: DbSession
-) -> ProfileResponse:
+async def create_profile(req: ProfileCreateRequest, db: DbSession) -> ProfileResponse:
     service = ProfileService(db)
     try:
         created = await service.create(
@@ -67,9 +66,7 @@ async def get_active(db: DbSession) -> ProfileResponse:
 
 
 @router.get("/{profile_id}", response_model=ProfileResponse)
-async def get_profile(
-    profile_id: uuid.UUID, db: DbSession
-) -> ProfileResponse:
+async def get_profile(profile_id: uuid.UUID, db: DbSession) -> ProfileResponse:
     service = ProfileService(db)
     row = await service.get(profile_id)
     if row is None:
@@ -78,9 +75,7 @@ async def get_profile(
 
 
 @router.post("/{profile_id}/apply", response_model=ProfileResponse)
-async def apply(
-    profile_id: uuid.UUID, db: DbSession
-) -> ProfileResponse:
+async def apply(profile_id: uuid.UUID, db: DbSession) -> ProfileResponse:
     service = ProfileService(db)
     try:
         row = await service.apply(profile_id)

@@ -42,8 +42,12 @@ def test_market_snapshot_lookup_by_key() -> None:
 
 
 def test_position_signed_qty() -> None:
-    long = Position(venue="binance", symbol="BTCUSDT", product="spot", qty_base=0.5, avg_entry_px=60000.0)
-    short = Position(venue="binance", symbol="BTCUSDT", product="perp", qty_base=-0.5, avg_entry_px=60010.0)
+    long = Position(
+        venue="binance", symbol="BTCUSDT", product="spot", qty_base=0.5, avg_entry_px=60000.0
+    )
+    short = Position(
+        venue="binance", symbol="BTCUSDT", product="perp", qty_base=-0.5, avg_entry_px=60010.0
+    )
     assert long.qty_base > 0
     assert short.qty_base < 0
 

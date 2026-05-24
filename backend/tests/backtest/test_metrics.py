@@ -48,7 +48,9 @@ def test_num_trades_counted_from_trade_log() -> None:
 
 
 def test_empty_curve_returns_zeros() -> None:
-    curve = pl.DataFrame({"ts_ms": [], "equity": []}, schema={"ts_ms": pl.Int64, "equity": pl.Float64})
+    curve = pl.DataFrame(
+        {"ts_ms": [], "equity": []}, schema={"ts_ms": pl.Int64, "equity": pl.Float64}
+    )
     metrics = compute_metrics(curve, params=_params())
     assert metrics.total_return == 0.0
     assert metrics.sharpe == 0.0

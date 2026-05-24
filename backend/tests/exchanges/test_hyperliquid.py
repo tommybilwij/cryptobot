@@ -29,10 +29,7 @@ async def test_fetch_balance_parses_clearinghouse_state() -> None:
     def handler(req: Request) -> Response:
         body = req.content
         # HL's /info accepts JSON; tolerate both compact and spaced forms.
-        assert (
-            b'"type":"clearinghouseState"' in body
-            or b'"type": "clearinghouseState"' in body
-        )
+        assert b'"type":"clearinghouseState"' in body or b'"type": "clearinghouseState"' in body
         return Response(
             200,
             json={
@@ -163,10 +160,7 @@ async def test_hl_fetch_funding_rate_parses_history() -> None:
 
     def handler(req: Request) -> Response:
         body = req.content
-        assert (
-            b'"type":"fundingHistory"' in body
-            or b'"type": "fundingHistory"' in body
-        )
+        assert b'"type":"fundingHistory"' in body or b'"type": "fundingHistory"' in body
         # HL returns a JSON array of funding payments.
         return Response(
             200,

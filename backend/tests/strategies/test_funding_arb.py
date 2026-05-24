@@ -13,12 +13,26 @@ def _params() -> ProfileParams:
 
 def _snap(funding: float = 0.0) -> MarketSnapshot:
     spot = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="spot",
-        open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
     )
     perp = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="perp",
-        open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
     )
     return MarketSnapshot(
         ts_ms=1,
@@ -35,9 +49,7 @@ def _state(
     cash: float = 10_000.0,
     funding: float = 0.0,
 ) -> MarketState:
-    return MarketState(
-        snapshot=_snap(funding), positions=positions, cash_quote=cash
-    )
+    return MarketState(snapshot=_snap(funding), positions=positions, cash_quote=cash)
 
 
 def test_flat_under_threshold_no_orders() -> None:
@@ -54,13 +66,25 @@ def test_no_funding_data_for_venue_no_orders() -> None:
             ts_ms=1,
             bars={
                 ("binance", "BTCUSDT", "spot"): Bar(
-                    ts_ms=1, venue="binance", symbol="BTCUSDT", product="spot",
-                    open=60000.0, high=60000.0, low=60000.0, close=60000.0,
+                    ts_ms=1,
+                    venue="binance",
+                    symbol="BTCUSDT",
+                    product="spot",
+                    open=60000.0,
+                    high=60000.0,
+                    low=60000.0,
+                    close=60000.0,
                     volume=1.0,
                 ),
                 ("binance", "BTCUSDT", "perp"): Bar(
-                    ts_ms=1, venue="binance", symbol="BTCUSDT", product="perp",
-                    open=60000.0, high=60000.0, low=60000.0, close=60000.0,
+                    ts_ms=1,
+                    venue="binance",
+                    symbol="BTCUSDT",
+                    product="perp",
+                    open=60000.0,
+                    high=60000.0,
+                    low=60000.0,
+                    close=60000.0,
                     volume=1.0,
                 ),
             },
@@ -106,12 +130,18 @@ def test_sizing_caps_at_cash_fraction() -> None:
 
 def _hedged_state(funding: float, qty: float = 0.083) -> MarketState:
     long_spot = Position(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        qty_base=qty, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        qty_base=qty,
+        avg_entry_px=60000.0,
     )
     short_perp = Position(
-        venue="binance", symbol="BTCUSDT", product="perp",
-        qty_base=-qty, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        qty_base=-qty,
+        avg_entry_px=60000.0,
     )
     return MarketState(
         snapshot=_snap(funding),
@@ -143,8 +173,11 @@ def test_hedged_below_exit_closes() -> None:
 def test_orphan_spot_closes_spot() -> None:
     s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT"])
     orphan = Position(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        qty_base=0.05, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        qty_base=0.05,
+        avg_entry_px=60000.0,
     )
     state = MarketState(
         snapshot=_snap(funding=0.0001),
@@ -161,8 +194,11 @@ def test_orphan_spot_closes_spot() -> None:
 def test_orphan_perp_closes_perp() -> None:
     s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT"])
     orphan = Position(
-        venue="binance", symbol="BTCUSDT", product="perp",
-        qty_base=-0.05, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        qty_base=-0.05,
+        avg_entry_px=60000.0,
     )
     state = MarketState(
         snapshot=_snap(funding=0.0001),
@@ -210,20 +246,48 @@ def test_multi_symbol_emits_orders_per_symbol() -> None:
     """Strategy across 2 symbols should emit orders for each (if both meet threshold)."""
     s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT", "ETHUSDT"])
     spot_btc = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="spot",
-        open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
     )
     perp_btc = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="perp",
-        open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
     )
     spot_eth = Bar(
-        ts_ms=1, venue="binance", symbol="ETHUSDT", product="spot",
-        open=3000.0, high=3010.0, low=2990.0, close=3000.0, volume=100.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="ETHUSDT",
+        product="spot",
+        open=3000.0,
+        high=3010.0,
+        low=2990.0,
+        close=3000.0,
+        volume=100.0,
     )
     perp_eth = Bar(
-        ts_ms=1, venue="binance", symbol="ETHUSDT", product="perp",
-        open=3000.0, high=3010.0, low=2990.0, close=3000.0, volume=100.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="ETHUSDT",
+        product="perp",
+        open=3000.0,
+        high=3010.0,
+        low=2990.0,
+        close=3000.0,
+        volume=100.0,
     )
     snap = MarketSnapshot(
         ts_ms=1,
@@ -249,22 +313,61 @@ def test_multi_symbol_emits_orders_per_symbol() -> None:
 def test_multi_symbol_splits_cash() -> None:
     """With 2 symbols, each gets ~half the cash allocation."""
     s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT", "ETHUSDT"])
-    spot_btc = Bar(ts_ms=1, venue="binance", symbol="BTCUSDT", product="spot",
-                   open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0)
-    perp_btc = Bar(ts_ms=1, venue="binance", symbol="BTCUSDT", product="perp",
-                   open=60000.0, high=60010.0, low=59990.0, close=60000.0, volume=10.0)
-    spot_eth = Bar(ts_ms=1, venue="binance", symbol="ETHUSDT", product="spot",
-                   open=3000.0, high=3010.0, low=2990.0, close=3000.0, volume=100.0)
-    perp_eth = Bar(ts_ms=1, venue="binance", symbol="ETHUSDT", product="perp",
-                   open=3000.0, high=3010.0, low=2990.0, close=3000.0, volume=100.0)
+    spot_btc = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
+    )
+    perp_btc = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        open=60000.0,
+        high=60010.0,
+        low=59990.0,
+        close=60000.0,
+        volume=10.0,
+    )
+    spot_eth = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="ETHUSDT",
+        product="spot",
+        open=3000.0,
+        high=3010.0,
+        low=2990.0,
+        close=3000.0,
+        volume=100.0,
+    )
+    perp_eth = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="ETHUSDT",
+        product="perp",
+        open=3000.0,
+        high=3010.0,
+        low=2990.0,
+        close=3000.0,
+        volume=100.0,
+    )
     snap = MarketSnapshot(
         ts_ms=1,
         bars={
-            ("binance", "BTCUSDT", "spot"): spot_btc, ("binance", "BTCUSDT", "perp"): perp_btc,
-            ("binance", "ETHUSDT", "spot"): spot_eth, ("binance", "ETHUSDT", "perp"): perp_eth,
+            ("binance", "BTCUSDT", "spot"): spot_btc,
+            ("binance", "BTCUSDT", "perp"): perp_btc,
+            ("binance", "ETHUSDT", "spot"): spot_eth,
+            ("binance", "ETHUSDT", "perp"): perp_eth,
         },
         funding_rates={
-            ("binance", "BTCUSDT"): 0.0010, ("binance", "ETHUSDT"): 0.0010,
+            ("binance", "BTCUSDT"): 0.0010,
+            ("binance", "ETHUSDT"): 0.0010,
         },
     )
     # Small cash (2000) → each symbol gets 1000 → at 0.5 fraction → 500 notional / px

@@ -56,9 +56,7 @@ class BacktestService:
                 )
             else:
                 symbol = run.symbols[0]
-                strategy = self._registry.build(
-                    run.strategy_name, venue=run.venue, symbol=symbol
-                )
+                strategy = self._registry.build(run.strategy_name, venue=run.venue, symbol=symbol)
             products: list[Product] = (
                 ["spot", "perp"]
                 if run.strategy_name in {"funding_arb_skeleton", "funding_arb"}
@@ -98,9 +96,7 @@ class BacktestService:
             raise
 
     async def _load_run(self, run_id: uuid.UUID) -> BacktestRun:
-        result = await self._session.execute(
-            select(BacktestRun).where(BacktestRun.id == run_id)
-        )
+        result = await self._session.execute(select(BacktestRun).where(BacktestRun.id == run_id))
         row = result.scalar_one_or_none()
         if row is None:
             raise KeyError(f"backtest run {run_id} not found")

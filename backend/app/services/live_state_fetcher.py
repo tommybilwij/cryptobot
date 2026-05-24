@@ -71,9 +71,7 @@ class LiveStateFetcher:
             funding = await exchange.fetch_funding_rate(symbol)
             if funding is not None:
                 funding_rates[(self._venue, symbol)] = funding
-        snapshot = MarketSnapshot(
-            ts_ms=ts_ms, bars=bars, funding_rates=funding_rates
-        )
+        snapshot = MarketSnapshot(ts_ms=ts_ms, bars=bars, funding_rates=funding_rates)
         return MarketState(
             snapshot=snapshot,
             positions=positions,

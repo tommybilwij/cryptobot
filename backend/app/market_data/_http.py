@@ -41,9 +41,7 @@ class RetryingFetcher:
                 if resp.status_code == _HTTP_OK:
                     return resp.content
                 # 429 / 5xx → retry
-                last_exc = RuntimeError(
-                    f"HTTP {resp.status_code} on {url}: {resp.text[:200]}"
-                )
+                last_exc = RuntimeError(f"HTTP {resp.status_code} on {url}: {resp.text[:200]}")
             except RequestError as e:
                 last_exc = e
             except HTTPStatusError as e:
@@ -63,16 +61,12 @@ class RetryingFetcher:
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                resp = await self._client.get(
-                    url, params=params, headers=headers, timeout=30.0
-                )
+                resp = await self._client.get(url, params=params, headers=headers, timeout=30.0)
                 if resp.status_code == _HTTP_NOT_FOUND:
                     raise FileNotFoundError(url)
                 if resp.status_code == _HTTP_OK:
                     return cast("dict[str, object] | list[object]", resp.json())
-                last_exc = RuntimeError(
-                    f"HTTP {resp.status_code} on {url}: {resp.text[:200]}"
-                )
+                last_exc = RuntimeError(f"HTTP {resp.status_code} on {url}: {resp.text[:200]}")
             except RequestError as e:
                 last_exc = e
             except HTTPStatusError as e:
@@ -92,14 +86,10 @@ class RetryingFetcher:
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                resp = await self._client.post(
-                    url, json=body, headers=headers, timeout=30.0
-                )
+                resp = await self._client.post(url, json=body, headers=headers, timeout=30.0)
                 if resp.status_code in (_HTTP_OK, _HTTP_CREATED):
                     return cast("dict[str, object] | list[object]", resp.json())
-                last_exc = RuntimeError(
-                    f"HTTP {resp.status_code} on POST {url}: {resp.text[:200]}"
-                )
+                last_exc = RuntimeError(f"HTTP {resp.status_code} on POST {url}: {resp.text[:200]}")
             except RequestError as e:
                 last_exc = e
             except HTTPStatusError as e:

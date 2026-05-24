@@ -82,9 +82,7 @@ class HyperliquidExchange:
     def _address(self) -> str:
         return cast("str", self._account.address)
 
-    def _sign_l1_action(
-        self, action: dict[str, Any], nonce_ms: int
-    ) -> dict[str, str | int]:
+    def _sign_l1_action(self, action: dict[str, Any], nonce_ms: int) -> dict[str, str | int]:
         """Sign an HL L1 action under the documented EIP-712 ``Agent`` scheme.
 
         HL signs an ``Agent`` struct ``{source: string, connectionId: bytes32}``
@@ -108,16 +106,12 @@ class HyperliquidExchange:
             ],
         }
         action_json = json.dumps(action, separators=(",", ":"), sort_keys=True)
-        connection_id_hex = hashlib.sha256(
-            f"{action_json}{nonce_ms}".encode()
-        ).hexdigest()
+        connection_id_hex = hashlib.sha256(f"{action_json}{nonce_ms}".encode()).hexdigest()
         message = {
             "source": "a",
             "connectionId": bytes.fromhex(connection_id_hex),
         }
-        signable = encode_typed_data(
-            domain_data=domain, message_types=types, message_data=message
-        )
+        signable = encode_typed_data(domain_data=domain, message_types=types, message_data=message)
         signed = self._account.sign_message(signable)
         sig_hex = cast("str", signed.signature.hex())
         return {
@@ -142,9 +136,7 @@ class HyperliquidExchange:
         # quote_currency is accepted for protocol parity; HL clearinghouse is
         # USDC-denominated only, so any other request would return zero.
         del quote_currency
-        body = await self._info(
-            {"type": "clearinghouseState", "user": self._address()}
-        )
+        body = await self._info({"type": "clearinghouseState", "user": self._address()})
         withdrawable = float(body.get("withdrawable", "0"))
         return Balance(
             venue=self.name,
@@ -154,9 +146,7 @@ class HyperliquidExchange:
         )
 
     async def fetch_positions(self) -> tuple[ExchangePosition, ...]:
-        body = await self._info(
-            {"type": "clearinghouseState", "user": self._address()}
-        )
+        body = await self._info({"type": "clearinghouseState", "user": self._address()})
         positions: list[ExchangePosition] = []
         for asset_pos in body.get("assetPositions", []):
             pos = asset_pos.get("position", {})
@@ -226,9 +216,7 @@ class HyperliquidExchange:
         if resp.status_code in (_HTTP_UNAUTHORIZED, _HTTP_FORBIDDEN):
             raise AuthFailed(f"hyperliquid place_order: {resp.text}")
         if resp.status_code >= _HTTP_BAD_REQUEST:
-            raise Rejected(
-                f"hyperliquid place_order: {resp.status_code} {resp.text}"
-            )
+            raise Rejected(f"hyperliquid place_order: {resp.status_code} {resp.text}")
         body = resp.json()
         if body.get("status") != "ok":
             raise Rejected(f"hyperliquid: {body}")
@@ -246,9 +234,7 @@ class HyperliquidExchange:
             submitted_ts_ms=nonce_ms,
         )
 
-    async def fetch_order(
-        self, order_id: str, symbol: str | None = None
-    ) -> OrderStatus:
+    async def fetch_order(self, order_id: str, symbol: str | None = None) -> OrderStatus:
         """Query order status via ``POST /info {"type":"orderStatus"}``.
 
         ``symbol`` is accepted for Protocol parity but ignored — HL keys
@@ -303,9 +289,7 @@ class HyperliquidExchange:
         empty or unreachable — callers treat missing funding as no-signal.
         """
         now_ms = int(time.time() * _MS_PER_SECOND)
-        lookback_ms = (
-            _FUNDING_LOOKBACK_HOURS * _SECONDS_PER_HOUR * _MS_PER_SECOND
-        )
+        lookback_ms = _FUNDING_LOOKBACK_HOURS * _SECONDS_PER_HOUR * _MS_PER_SECOND
         body = await self._info(
             {
                 "type": "fundingHistory",

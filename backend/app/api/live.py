@@ -27,9 +27,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 async def _active_profile(db: AsyncSession) -> StrategyProfile | None:
     """Return the single active StrategyProfile (or None if no row is active)."""
-    result = await db.execute(
-        select(StrategyProfile).where(StrategyProfile.is_active.is_(True))
-    )
+    result = await db.execute(select(StrategyProfile).where(StrategyProfile.is_active.is_(True)))
     return result.scalar_one_or_none()
 
 
@@ -61,9 +59,7 @@ async def get_status(db: DbSession) -> LiveStatusResponse:
         dry_run_mode=bool(params.get("live.dry_run_mode")),
         venue=str(params.get("live.venue")),
         last_tick_ts=last_entry.ts if last_entry else None,
-        last_reconciliation_status=(
-            last_entry.reconciliation_status if last_entry else None
-        ),
+        last_reconciliation_status=(last_entry.reconciliation_status if last_entry else None),
         last_equity_quote=last_equity,
         peak_equity_quote=peak,
         drawdown_pct=drawdown_pct,
@@ -79,9 +75,7 @@ async def stop(db: DbSession) -> LiveStopResponse:
     """
     profile = await _active_profile(db)
     if profile is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "no active profile to stop"
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "no active profile to stop")
     new_config = dict(profile.config) if profile.config else {}
     live_section = dict(new_config.get("live", {}))
     live_section["enabled"] = False

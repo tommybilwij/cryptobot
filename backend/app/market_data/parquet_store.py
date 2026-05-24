@@ -38,12 +38,7 @@ class ParquetStore:
         month: int,
     ) -> Path:
         return (
-            self.root
-            / exchange
-            / symbol
-            / data_type.value
-            / f"{year:04d}"
-            / f"{month:02d}.parquet"
+            self.root / exchange / symbol / data_type.value / f"{year:04d}" / f"{month:02d}.parquet"
         )
 
     def glob(self, exchange: str, symbol: str, data_type: DataType) -> str:

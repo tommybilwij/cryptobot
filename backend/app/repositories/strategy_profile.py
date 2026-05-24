@@ -1,4 +1,5 @@
 """Repository layer for StrategyProfile (DB queries only — no business logic)."""
+
 from __future__ import annotations
 
 import uuid
@@ -39,9 +40,7 @@ class StrategyProfileRepository:
 
     async def get_active(self) -> StrategyProfile | None:
         return (
-            await self._session.execute(
-                select(StrategyProfile).where(StrategyProfile.is_active)
-            )
+            await self._session.execute(select(StrategyProfile).where(StrategyProfile.is_active))
         ).scalar_one_or_none()
 
     async def create(

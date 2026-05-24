@@ -34,9 +34,7 @@ async def test_detect_gaps_no_gaps(tmp_path: Path, db_session: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
-async def test_detect_gaps_finds_missing_minute(
-    tmp_path: Path, db_session: AsyncSession
-) -> None:
+async def test_detect_gaps_finds_missing_minute(tmp_path: Path, db_session: AsyncSession) -> None:
     store = ParquetStore(root=tmp_path)
     # Minute 1714521660000 is missing (gap between :600 and :720)
     df = pl.DataFrame(

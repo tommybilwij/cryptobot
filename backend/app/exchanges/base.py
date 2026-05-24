@@ -31,9 +31,7 @@ class Exchange(Protocol):
         """Submit ``order``. Returns receipt with the venue-assigned ``order_id``."""
         ...
 
-    async def fetch_order(
-        self, order_id: str, symbol: str | None = None
-    ) -> OrderStatus:
+    async def fetch_order(self, order_id: str, symbol: str | None = None) -> OrderStatus:
         """Get current status of an order placed via ``place_order``.
 
         ``symbol`` is optional for protocol parity but required by some venues

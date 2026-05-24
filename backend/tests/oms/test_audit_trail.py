@@ -24,9 +24,7 @@ from app.services.decision_audit import DecisionAuditService
 
 
 def _hash(d: dict[str, Any]) -> str:
-    return hashlib.sha256(
-        json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 @pytest.mark.asyncio
@@ -43,9 +41,7 @@ async def test_dispatch_writes_audit_with_provided_hash(
     paper = PaperExchange(venue="binance", params=params, initial_cash=10_000.0)
     paper.set_mark_price("BTCUSDT", "spot", 60000.0)
 
-    profile = StrategyProfile(
-        name="audit-trail", version=3, is_active=False, config={"x": 1}
-    )
+    profile = StrategyProfile(name="audit-trail", version=3, is_active=False, config={"x": 1})
     db_session.add(profile)
     await db_session.flush()
 
@@ -60,8 +56,12 @@ async def test_dispatch_writes_audit_with_provided_hash(
         ledger=MultiVenueCashLedger(),
     )
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     result = await oms.dispatch(
         orders=[order],
@@ -84,9 +84,7 @@ async def test_dispatch_writes_audit_with_provided_hash(
     # The audit row must still reflect the OLD hash + version.
     row = (
         await db_session.execute(
-            select(DecisionAuditEntry).where(
-                DecisionAuditEntry.id == result.audit_entry_id
-            )
+            select(DecisionAuditEntry).where(DecisionAuditEntry.id == result.audit_entry_id)
         )
     ).scalar_one()
     assert row.profile_hash == locked_hash

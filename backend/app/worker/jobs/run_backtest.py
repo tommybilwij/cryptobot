@@ -51,12 +51,8 @@ async def run() -> None:
     if not raw_id:
         raise KeyError("BACKTEST_ID env var required for run_backtest job")
     run_id = uuid.UUID(raw_id)
-    parquet_root = Path(
-        os.environ.get("BACKTEST_PARQUET_ROOT", str(_DEFAULT_PARQUET_ROOT))
-    )
-    curves_root = Path(
-        os.environ.get("BACKTEST_CURVES_ROOT", str(_DEFAULT_CURVES_ROOT))
-    )
+    parquet_root = Path(os.environ.get("BACKTEST_PARQUET_ROOT", str(_DEFAULT_PARQUET_ROOT)))
+    curves_root = Path(os.environ.get("BACKTEST_CURVES_ROOT", str(_DEFAULT_CURVES_ROOT)))
 
     factory = get_session_factory()
     async with factory() as session:

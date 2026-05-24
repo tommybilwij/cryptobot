@@ -70,9 +70,7 @@ class Engine:
         # preload funding data per (venue, symbol)
         funding_data: dict[tuple[str, str], pl.DataFrame] = {}
         for symbol in symbols:
-            df = self._loader.load_funding(
-                venue=venue, symbol=symbol, start=start, end=end
-            )
+            df = self._loader.load_funding(venue=venue, symbol=symbol, start=start, end=end)
             if df is not None and df.height > 0:
                 funding_data[(venue, symbol)] = df
 

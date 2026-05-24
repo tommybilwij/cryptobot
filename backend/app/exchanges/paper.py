@@ -82,9 +82,7 @@ class PaperExchange:
             submitted_ts_ms=submitted_ts_ms,
         )
 
-    async def fetch_order(
-        self, order_id: str, symbol: str | None = None
-    ) -> OrderStatus:
+    async def fetch_order(self, order_id: str, symbol: str | None = None) -> OrderStatus:
         # ``symbol`` is accepted for Protocol parity; paper indexes by order_id.
         del symbol
         if order_id not in self._orders:
@@ -99,14 +97,15 @@ class PaperExchange:
         mark = self._marks.get((order.symbol, order.product))
         if mark is None:
             return OrderStatus(
-                order_id=order_id, status="rejected", fill_px=None,
-                filled_qty_base=0.0, fee_quote=0.0,
+                order_id=order_id,
+                status="rejected",
+                fill_px=None,
+                filled_qty_base=0.0,
+                fee_quote=0.0,
                 raw={"reason": f"no mark for {order.symbol}/{order.product}"},
             )
         slip_bps = float(self._params.get(f"execution.slippage_bps.{self._venue}"))
-        fee_bps = float(
-            self._params.get(f"execution.fee_bps.{self._venue}.{order.product}")
-        )
+        fee_bps = float(self._params.get(f"execution.fee_bps.{self._venue}.{order.product}"))
         slip = slip_bps / _BPS_DIVISOR
         if order.order_type == "market":
             fill_px = mark * (1.0 + slip) if order.side == "buy" else mark * (1.0 - slip)
@@ -114,8 +113,11 @@ class PaperExchange:
             # Limit orders: assume fill iff mark touched the limit
             if order.limit_px is None:
                 return OrderStatus(
-                    order_id=order_id, status="rejected", fill_px=None,
-                    filled_qty_base=0.0, fee_quote=0.0,
+                    order_id=order_id,
+                    status="rejected",
+                    fill_px=None,
+                    filled_qty_base=0.0,
+                    fee_quote=0.0,
                     raw={"reason": "limit order without limit_px"},
                 )
             if order.side == "buy" and mark <= order.limit_px:
@@ -124,8 +126,12 @@ class PaperExchange:
                 fill_px = order.limit_px
             else:
                 return OrderStatus(
-                    order_id=order_id, status="pending", fill_px=None,
-                    filled_qty_base=0.0, fee_quote=0.0, raw={},
+                    order_id=order_id,
+                    status="pending",
+                    fill_px=None,
+                    filled_qty_base=0.0,
+                    fee_quote=0.0,
+                    raw={},
                 )
         notional = abs(order.qty_base) * fill_px
         fee = notional * (fee_bps / _BPS_DIVISOR)
@@ -133,8 +139,11 @@ class PaperExchange:
             cost = notional + fee
             if cost > self._cash:
                 return OrderStatus(
-                    order_id=order_id, status="rejected", fill_px=None,
-                    filled_qty_base=0.0, fee_quote=0.0,
+                    order_id=order_id,
+                    status="rejected",
+                    fill_px=None,
+                    filled_qty_base=0.0,
+                    fee_quote=0.0,
                     raw={"reason": f"insufficient cash {self._cash} < {cost}"},
                 )
             self._cash -= cost
@@ -143,8 +152,12 @@ class PaperExchange:
 
         self._apply_position(order, fill_px)
         return OrderStatus(
-            order_id=order_id, status="filled", fill_px=fill_px,
-            filled_qty_base=order.qty_base, fee_quote=fee, raw={},
+            order_id=order_id,
+            status="filled",
+            fill_px=fill_px,
+            filled_qty_base=order.qty_base,
+            fee_quote=fee,
+            raw={},
         )
 
     def _apply_position(self, order: Order, fill_px: float) -> None:
@@ -153,9 +166,13 @@ class PaperExchange:
         existing = self._positions.get(key)
         if existing is None:
             self._positions[key] = ExchangePosition(
-                venue=self._venue, symbol=order.symbol, product=order.product,
-                qty_base=delta, avg_entry_px=fill_px,
-                mark_px=fill_px, unrealized_pnl_quote=0.0,
+                venue=self._venue,
+                symbol=order.symbol,
+                product=order.product,
+                qty_base=delta,
+                avg_entry_px=fill_px,
+                mark_px=fill_px,
+                unrealized_pnl_quote=0.0,
             )
             return
         new_qty = existing.qty_base + delta
@@ -165,13 +182,16 @@ class PaperExchange:
         same_sign = (delta * existing.qty_base) > 0
         if same_sign:
             new_avg = (
-                (existing.avg_entry_px * abs(existing.qty_base))
-                + (fill_px * abs(delta))
+                (existing.avg_entry_px * abs(existing.qty_base)) + (fill_px * abs(delta))
             ) / (abs(existing.qty_base) + abs(delta))
         else:
             new_avg = existing.avg_entry_px
         self._positions[key] = ExchangePosition(
-            venue=self._venue, symbol=order.symbol, product=order.product,
-            qty_base=new_qty, avg_entry_px=new_avg,
-            mark_px=fill_px, unrealized_pnl_quote=0.0,
+            venue=self._venue,
+            symbol=order.symbol,
+            product=order.product,
+            qty_base=new_qty,
+            avg_entry_px=new_avg,
+            mark_px=fill_px,
+            unrealized_pnl_quote=0.0,
         )

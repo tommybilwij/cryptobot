@@ -21,13 +21,9 @@ class SymbolManifestSnapshot(Base):
     """
 
     __tablename__ = "symbol_manifest_snapshots"
-    __table_args__ = (
-        UniqueConstraint("snapshot_date", "exchange", name="uq_manifest_snapshot"),
-    )
+    __table_args__ = (UniqueConstraint("snapshot_date", "exchange", name="uq_manifest_snapshot"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
     exchange: Mapped[str] = mapped_column(String(40), nullable=False)
     symbols: Mapped[list[str]] = mapped_column(ARRAY(String(40)), nullable=False)

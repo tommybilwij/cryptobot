@@ -10,9 +10,7 @@ from app.models.data_health_event import DataHealthEvent
 
 
 @pytest.mark.asyncio
-async def test_recent_returns_events(
-    async_client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_recent_returns_events(async_client: AsyncClient, db_session: AsyncSession) -> None:
     event = DataHealthEvent(
         event_type="gap",
         exchange="binance",

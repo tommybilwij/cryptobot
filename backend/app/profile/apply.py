@@ -9,6 +9,7 @@ This design means we never have to rewrite JSONB blobs at apply time — the
 registry is the source of truth, and the profile is treated as a sparse
 override layer.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -41,9 +42,7 @@ async def apply_profile(session: AsyncSession, profile_id: uuid.UUID) -> Strateg
         update(StrategyProfile).where(StrategyProfile.is_active).values(is_active=False)
     )
     await session.execute(
-        update(StrategyProfile)
-        .where(StrategyProfile.id == profile_id)
-        .values(is_active=True)
+        update(StrategyProfile).where(StrategyProfile.id == profile_id).values(is_active=True)
     )
     await session.flush()
     await session.refresh(target)

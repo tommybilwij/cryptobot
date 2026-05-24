@@ -40,9 +40,7 @@ class _StubStrategy:
 
 
 async def _make_profile(db_session: AsyncSession) -> StrategyProfile:
-    profile = StrategyProfile(
-        name="live-runner-test", version=1, is_active=False, config={}
-    )
+    profile = StrategyProfile(name="live-runner-test", version=1, is_active=False, config={})
     db_session.add(profile)
     await db_session.flush()
     return profile
@@ -57,9 +55,7 @@ def _build_runner(
     initial_cash: float = 10_000.0,
     alerter: Alerter | AsyncMock | None = None,
 ) -> tuple[LiveRunner, PaperExchange, AsyncMock]:
-    paper = PaperExchange(
-        venue="binance", params=params, initial_cash=initial_cash
-    )
+    paper = PaperExchange(venue="binance", params=params, initial_cash=initial_cash)
     paper.set_mark_price("BTCUSDT", "spot", 60_000.0)
     paper.set_mark_price("BTCUSDT", "perp", 60_000.0)
     exchanges: dict[str, Any] = {"binance": paper}
@@ -116,12 +112,20 @@ async def test_dispatches_when_strategy_emits_orders(
     params = ProfileParams(profile={"live": {"enabled": True}})
     orders = [
         Order(
-            venue="binance", symbol="BTCUSDT", product="spot",
-            side="buy", qty_base=0.01, order_type="market",
+            venue="binance",
+            symbol="BTCUSDT",
+            product="spot",
+            side="buy",
+            qty_base=0.01,
+            order_type="market",
         ),
         Order(
-            venue="binance", symbol="BTCUSDT", product="perp",
-            side="sell", qty_base=0.01, order_type="market",
+            venue="binance",
+            symbol="BTCUSDT",
+            product="perp",
+            side="sell",
+            qty_base=0.01,
+            order_type="market",
         ),
     ]
     runner, _, _ = _build_runner(
@@ -136,13 +140,17 @@ async def test_dispatches_when_strategy_emits_orders(
     assert result["status"] == "ok"
     # Two fills (spot + perp) recorded in the most recent order audit row.
     audit_rows = (
-        await db_session.execute(
-            select(DecisionAuditEntry)
-            .where(DecisionAuditEntry.decision_type == "order")
-            .order_by(DecisionAuditEntry.ts.desc())
-            .limit(1)
+        (
+            await db_session.execute(
+                select(DecisionAuditEntry)
+                .where(DecisionAuditEntry.decision_type == "order")
+                .order_by(DecisionAuditEntry.ts.desc())
+                .limit(1)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(audit_rows) == 1
     assert len(audit_rows[0].fills) == 2
 
@@ -163,12 +171,14 @@ async def test_skips_dispatch_when_no_orders(db_session: AsyncSession) -> None:
     assert result["status"] == "no_orders"
     # No "order" audit row written when the strategy emits nothing.
     audit_rows = (
-        await db_session.execute(
-            select(DecisionAuditEntry).where(
-                DecisionAuditEntry.decision_type == "order"
+        (
+            await db_session.execute(
+                select(DecisionAuditEntry).where(DecisionAuditEntry.decision_type == "order")
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audit_rows == []
 
 
@@ -200,12 +210,14 @@ async def test_halts_on_drawdown_brake(db_session: AsyncSession) -> None:
 
     # A snapshot row with the halt status was logged before the raise.
     snapshot_rows = (
-        await db_session.execute(
-            select(DecisionAuditEntry).where(
-                DecisionAuditEntry.decision_type == "snapshot"
+        (
+            await db_session.execute(
+                select(DecisionAuditEntry).where(DecisionAuditEntry.decision_type == "snapshot")
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(snapshot_rows) == 1
     assert snapshot_rows[0].input_state["status"] == "halted_drawdown_brake"
 
@@ -229,12 +241,14 @@ async def test_logs_snapshot_after_interval(db_session: AsyncSession) -> None:
     await runner.run_one_tick()
 
     snapshot_rows = (
-        await db_session.execute(
-            select(DecisionAuditEntry).where(
-                DecisionAuditEntry.decision_type == "snapshot"
+        (
+            await db_session.execute(
+                select(DecisionAuditEntry).where(DecisionAuditEntry.decision_type == "snapshot")
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(snapshot_rows) >= 1
     assert snapshot_rows[0].input_state["status"] == "ok"
 
@@ -272,9 +286,9 @@ async def test_runner_alerts_on_drawdown_brake(db_session: AsyncSession) -> None
     # At least one alerter.send call with the documented severity + event.
     assert alerter.send.await_count >= 1
     critical_calls = [
-        c for c in alerter.send.await_args_list
-        if c.kwargs.get("severity") == "critical"
-        and c.kwargs.get("event") == "DrawdownBrakeHalt"
+        c
+        for c in alerter.send.await_args_list
+        if c.kwargs.get("severity") == "critical" and c.kwargs.get("event") == "DrawdownBrakeHalt"
     ]
     assert len(critical_calls) == 1
     assert "equity" in critical_calls[0].kwargs["details"]
