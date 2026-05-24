@@ -160,3 +160,57 @@ async def test_factory_testnet_vs_mainnet_url() -> None:
 
     assert isinstance(ex2, BinanceExchange)
     assert ex2._base == "https://testnet.binance.vision"
+
+
+@pytest.mark.asyncio
+async def test_factory_uses_sub_account_keys_when_present() -> None:
+    """Sub-account key is used when populated."""
+    params = ProfileParams(profile={})
+    settings = _settings(
+        binance_api_key="base-key",
+        binance_api_secret="base-secret",
+        binance_api_key_funding_arb="sub-key",
+        binance_api_secret_funding_arb="sub-secret",
+    )
+
+    async with AsyncClient(transport=MockTransport(_noop_handler)) as client:
+        fetcher = RetryingFetcher(client=client, max_retries=0, base_backoff_s=0.0)
+        ex = build_exchange(
+            "binance",
+            params=params,
+            fetcher=fetcher,
+            settings=settings,
+            dry_run=False,
+            sub_account="funding_arb",
+        )
+
+    assert isinstance(ex, BinanceExchange)
+    assert ex._api_key == "sub-key"
+    assert ex._api_secret == "sub-secret"
+
+
+@pytest.mark.asyncio
+async def test_factory_falls_back_to_base_keys_when_sub_empty() -> None:
+    """If sub_account requested but sub keys empty, fall back to base."""
+    params = ProfileParams(profile={})
+    settings = _settings(
+        binance_api_key="base-key",
+        binance_api_secret="base-secret",
+        binance_api_key_funding_arb="",  # empty sub
+        binance_api_secret_funding_arb="",
+    )
+
+    async with AsyncClient(transport=MockTransport(_noop_handler)) as client:
+        fetcher = RetryingFetcher(client=client, max_retries=0, base_backoff_s=0.0)
+        ex = build_exchange(
+            "binance",
+            params=params,
+            fetcher=fetcher,
+            settings=settings,
+            dry_run=False,
+            sub_account="funding_arb",
+        )
+
+    assert isinstance(ex, BinanceExchange)
+    assert ex._api_key == "base-key"
+    assert ex._api_secret == "base-secret"

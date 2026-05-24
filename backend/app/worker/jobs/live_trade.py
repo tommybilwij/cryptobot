@@ -68,6 +68,10 @@ async def run() -> None:
         venue = str(params.get("live.venue"))
         symbol = str(params.get("strategies.funding_arb.default_symbol"))
         dry_run = bool(params.get("live.dry_run_mode"))
+        # Phase 13: route each venue adapter to the strategy's sub-account
+        # keys. Falls back to base keys inside the factory when the sub
+        # keys are empty.
+        sub_account = str(params.get("strategies.funding_arb.sub_account"))
 
         # Shared HTTP client for the entire run — both the factory-built
         # adapters and the Alerter draw their RetryingFetcher from it. The
@@ -82,6 +86,7 @@ async def run() -> None:
                     fetcher=fetcher,
                     settings=settings,
                     dry_run=dry_run,
+                    sub_account=sub_account,
                 )
                 for v in _VENUES
             }

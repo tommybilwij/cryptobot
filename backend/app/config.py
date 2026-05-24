@@ -35,5 +35,14 @@ class Settings(BaseSettings):
     bybit_api_secret: str = ""
     hyperliquid_wallet_private_key: str = ""
 
+    # --- Sub-account keys (Phase 13) — strategy-specific isolation ---
+    binance_api_key_funding_arb: str = ""
+    binance_api_secret_funding_arb: str = ""
+    binance_api_key_factor_pf: str = ""
+    binance_api_secret_factor_pf: str = ""
+    bybit_api_key_funding_arb: str = ""
+    bybit_api_secret_funding_arb: str = ""
+    hyperliquid_wallet_private_key_funding_arb: str = ""
+
 
 settings = Settings()
