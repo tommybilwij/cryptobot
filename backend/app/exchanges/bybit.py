@@ -266,6 +266,56 @@ class BybitExchange:
     async def cancel_order(self, order_id: str) -> None:
         return
 
+    async def amend_order(
+        self,
+        order_id: str,
+        *,
+        new_qty: float | None = None,
+        new_limit_px: float | None = None,
+    ) -> OrderStatus:
+        """Amend via Bybit V5 ``POST /v5/order/amend``.
+
+        Bybit's amend is a true in-place mutation (no cancel + replace), so
+        the returned ``orderId`` matches the input. We POST through a fresh
+        ``httpx.AsyncClient`` for the same double-fill safety as
+        ``place_order``. Phase 11 returns a pending stub; the OMS polls
+        ``fetch_order`` afterwards for live fill data.
+        """
+        body_obj: dict[str, Any] = {
+            "category": "linear",
+            "orderId": order_id,
+        }
+        if new_qty is not None:
+            body_obj["qty"] = str(new_qty)
+        if new_limit_px is not None:
+            body_obj["price"] = str(new_limit_px)
+        payload = json.dumps(body_obj, separators=(",", ":"))
+        ts_ms = str(int(time.time() * _MS_PER_SECOND))
+        url = f"{self._base}/v5/order/amend"
+        headers = {**self._headers(ts_ms, payload), "Content-Type": "application/json"}
+        try:
+            async with httpx.AsyncClient() as raw:
+                resp = await raw.post(
+                    url, content=payload, headers=headers, timeout=_DEFAULT_TIMEOUT_S
+                )
+        except httpx.RequestError as e:
+            raise RuntimeError(f"bybit amend_order: {e}") from e
+        if resp.status_code == _HTTP_UNAUTHORIZED:
+            raise AuthFailed(f"bybit amend_order: {resp.text}")
+        if resp.status_code >= _HTTP_BAD_REQUEST:
+            raise Rejected(f"bybit amend_order: {resp.status_code} {resp.text}")
+        data = resp.json()
+        self._check_response(data)
+        new_oid = str(data.get("result", {}).get("orderId", order_id))
+        return OrderStatus(
+            order_id=new_oid,
+            status="pending",
+            fill_px=None,
+            filled_qty_base=0.0,
+            fee_quote=0.0,
+            raw=data,
+        )
+
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         category = "linear" if product == "perp" else "spot"
         url = f"{self._base}/v5/market/tickers?category={category}&symbol={symbol}"

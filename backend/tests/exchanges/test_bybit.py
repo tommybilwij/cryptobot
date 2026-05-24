@@ -254,6 +254,49 @@ async def test_bybit_fetch_order_parses_realtime() -> None:
 
 
 @pytest.mark.asyncio
+async def test_bybit_amend_order_posts_to_v5_amend() -> None:
+    """amend_order POSTs to /v5/order/amend and parses the orderId from result."""
+    captured: dict[str, Any] = {}
+
+    async def mock_post(
+        self: httpx.AsyncClient,
+        url: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
+        captured["url"] = url
+        captured["content"] = kwargs.get("content")
+        return Response(
+            200,
+            json={
+                "retCode": 0,
+                "retMsg": "OK",
+                "result": {"orderId": "abc-123", "orderLinkId": "x"},
+            },
+        )
+
+    async with AsyncClient() as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = BybitExchange(
+            fetcher=fetcher,
+            params=_params(),
+            api_key="t",
+            api_secret="t",
+            base_url="https://api-testnet.bybit.com",
+        )
+        with patch.object(httpx.AsyncClient, "post", mock_post):
+            status = await ex.amend_order("abc-123", new_qty=0.2, new_limit_px=59000.0)
+
+    assert "/v5/order/amend" in captured["url"]
+    body = captured["content"]
+    assert '"orderId":"abc-123"' in body
+    assert '"qty":"0.2"' in body
+    assert '"price":"59000.0"' in body
+    assert status.order_id == "abc-123"
+    assert status.status == "pending"
+
+
+@pytest.mark.asyncio
 async def test_auth_failure_raises() -> None:
     # Bybit signals auth failure with HTTP 200 + retCode 10003.
     def handler(req: Request) -> Response:

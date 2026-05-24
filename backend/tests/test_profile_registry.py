@@ -324,3 +324,10 @@ def test_oms_partial_fill_and_auto_rebalance_keys_present() -> None:
     assert PROFILE_SCOPED_DEFAULTS["oms.partial_fill_min_remainder_qty"] == 0.0001
     assert PROFILE_SCOPED_DEFAULTS["oms.max_partial_fill_retries"] == 3
     assert PROFILE_SCOPED_BOOL_DEFAULTS["oms.hedge_auto_rebalance_enabled"] is False
+
+
+def test_wallet_active_suffix_default_empty() -> None:
+    """HP11: wallet.active_suffix defaults to '' (rotation off; use base key)."""
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
+    assert PROFILE_SCOPED_STRING_DEFAULTS["wallet.active_suffix"] == ""

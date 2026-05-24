@@ -245,6 +245,41 @@ class BinanceExchange:
     async def cancel_order(self, order_id: str) -> None:
         return
 
+    async def amend_order(
+        self,
+        order_id: str,
+        *,
+        new_qty: float | None = None,
+        new_limit_px: float | None = None,
+    ) -> OrderStatus:
+        """Cancel-and-replace via Binance's ``POST /api/v3/order/cancelReplace``.
+
+        Binance spot has no in-place amend; the documented atomic primitive is
+        ``cancelReplace`` which cancels the existing order and immediately
+        places a new one with the supplied qty/price. Phase 11 returns the
+        new order's status as a pending stub — the OMS polls ``fetch_order``
+        afterwards for live fill data.
+        """
+        params: dict[str, Any] = {
+            "cancelOrderId": int(order_id),
+            "cancelReplaceMode": "STOP_ON_FAILURE",
+        }
+        if new_qty is not None:
+            params["quantity"] = str(new_qty)
+        if new_limit_px is not None:
+            params["price"] = str(new_limit_px)
+        body = await self._signed_post("/api/v3/order/cancelReplace", params)
+        new_order = body.get("newOrderResponse", {}) or {}
+        new_oid = str(new_order.get("orderId", order_id))
+        return OrderStatus(
+            order_id=new_oid,
+            status="pending",
+            fill_px=None,
+            filled_qty_base=0.0,
+            fee_quote=0.0,
+            raw=body,
+        )
+
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         body = await self._signed_get("/api/v3/ticker/price", {"symbol": symbol})
         return float(body["price"])

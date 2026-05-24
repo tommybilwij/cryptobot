@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     bybit_api_secret_funding_arb: str = ""
     hyperliquid_wallet_private_key_funding_arb: str = ""
 
+    # --- Wallet rotation slots (Phase 11) ---
+    # Each strategy/venue carries an _a/_b pair so the WalletRotator can
+    # hot-swap which set of credentials is active via ``wallet.active_suffix``
+    # in the profile registry. Only Binance funding_arb is wired for Phase 11;
+    # Bybit/HL follow the same naming convention when added.
+    binance_api_key_funding_arb_a: str = ""
+    binance_api_secret_funding_arb_a: str = ""
+    binance_api_key_funding_arb_b: str = ""
+    binance_api_secret_funding_arb_b: str = ""
+
     anthropic_api_key: str = ""
 
     # --- DB connection pool sizing (HP7) ---
