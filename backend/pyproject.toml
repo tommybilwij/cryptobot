@@ -19,6 +19,7 @@ dependencies = [
     "eth-account>=0.13",
     "anthropic>=0.40",
     "msgpack>=1.0",
+    "websockets>=12.0",
 ]
 
 [dependency-groups]
