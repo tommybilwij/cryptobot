@@ -119,6 +119,12 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "exchanges.binance.timeout_s": 10.0,
     "exchanges.bybit.timeout_s": 10.0,
     "exchanges.hyperliquid.timeout_s": 10.0,
+    # ── Per-venue funding cadence ───────────────────────────────────────
+    # HL pays hourly (8766/yr), Binance + Bybit perp pay every 8h (1095.75/yr).
+    # FundingArbStrategy reads the per-venue key when computing carry/sizing.
+    "exchanges.binance.funding_intervals_per_year": 1095.75,
+    "exchanges.bybit.funding_intervals_per_year": 1095.75,
+    "exchanges.hyperliquid.funding_intervals_per_year": 8766.0,
     # ── Backtest assumptions ────────────────────────────────────────────
     "backtest.starting_capital_usd": 10000,
     "backtest.warmup_days": 60,

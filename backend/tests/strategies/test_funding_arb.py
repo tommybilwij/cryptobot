@@ -310,6 +310,48 @@ def test_multi_symbol_emits_orders_per_symbol() -> None:
     assert symbols_seen == {"BTCUSDT", "ETHUSDT"}
 
 
+def test_basis_halt_skips_symbol() -> None:
+    """When |perp - spot| / spot exceeds basis_halt_bps, no orders for that symbol."""
+    s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT"])
+    spot = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        open=60000.0,
+        high=60000.0,
+        low=60000.0,
+        close=60000.0,
+        volume=10.0,
+    )
+    # Perp 2% premium over spot ≈ 200 bps > default basis_halt_bps (80).
+    perp = Bar(
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        open=61200.0,
+        high=61200.0,
+        low=61200.0,
+        close=61200.0,
+        volume=10.0,
+    )
+    state = MarketState(
+        snapshot=MarketSnapshot(
+            ts_ms=1,
+            bars={
+                ("binance", "BTCUSDT", "spot"): spot,
+                ("binance", "BTCUSDT", "perp"): perp,
+            },
+            # Funding well above entry threshold — would normally open a hedge.
+            funding_rates={("binance", "BTCUSDT"): 0.0010},
+        ),
+        positions=(),
+        cash_quote=10_000.0,
+    )
+    assert s.evaluate(state, _params()) == []
+
+
 def test_multi_symbol_splits_cash() -> None:
     """With 2 symbols, each gets ~half the cash allocation."""
     s = FundingArbStrategy(venue="binance", symbols=["BTCUSDT", "ETHUSDT"])
