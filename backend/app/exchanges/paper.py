@@ -82,7 +82,11 @@ class PaperExchange:
             submitted_ts_ms=submitted_ts_ms,
         )
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        # ``symbol`` is accepted for Protocol parity; paper indexes by order_id.
+        del symbol
         if order_id not in self._orders:
             raise KeyError(f"unknown order {order_id}")
         return self._orders[order_id]

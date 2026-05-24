@@ -31,8 +31,15 @@ class Exchange(Protocol):
         """Submit ``order``. Returns receipt with the venue-assigned ``order_id``."""
         ...
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
-        """Get current status of an order placed via ``place_order``."""
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        """Get current status of an order placed via ``place_order``.
+
+        ``symbol`` is optional for protocol parity but required by some venues
+        (Binance, Bybit) — when omitted those adapters degrade to a pending
+        stub rather than guess the symbol from the order id.
+        """
         ...
 
     async def cancel_order(self, order_id: str) -> None:
