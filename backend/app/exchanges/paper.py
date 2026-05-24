@@ -20,6 +20,7 @@ from app.exchanges.types import (
 from app.profile.params import ProfileParams
 
 _BPS_DIVISOR = 10_000.0
+_MS_PER_SECOND = 1000
 
 
 class PaperExchange:
@@ -63,7 +64,7 @@ class PaperExchange:
 
     async def place_order(self, order: Order) -> OrderReceipt:
         order_id = uuid.uuid4().hex
-        submitted_ts_ms = int(time.time() * 1000)
+        submitted_ts_ms = int(time.time() * _MS_PER_SECOND)
         status = self._simulate_fill(order, order_id)
         self._orders[order_id] = status
         return OrderReceipt(

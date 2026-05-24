@@ -31,6 +31,7 @@ _AUTH_FAIL_CODES: set[int] = {401, 403}
 _REJECTED_CODES: set[int] = {400, 422}
 _HTTP_OK = 200
 _MS_PER_SECOND = 1000
+_DEFAULT_TIMEOUT_S = 10.0
 
 
 class BinanceExchange:
@@ -107,7 +108,9 @@ class BinanceExchange:
         url = f"{self._base}{path}?{self._sign(params)}"
         try:
             async with httpx.AsyncClient() as raw:
-                resp = await raw.post(url, headers=self._headers(), timeout=10.0)
+                resp = await raw.post(
+                    url, headers=self._headers(), timeout=_DEFAULT_TIMEOUT_S
+                )
         except httpx.RequestError as e:
             raise RuntimeError(f"post {path}: {e}") from e
         if resp.status_code in _AUTH_FAIL_CODES:

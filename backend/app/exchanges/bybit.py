@@ -36,6 +36,7 @@ _HTTP_UNAUTHORIZED = 401
 _HTTP_BAD_REQUEST = 400
 _OK_RET_CODE = 0
 _MS_PER_SECOND = 1000
+_DEFAULT_TIMEOUT_S = 10.0
 
 
 class BybitExchange:
@@ -171,7 +172,7 @@ class BybitExchange:
         try:
             async with httpx.AsyncClient() as raw:
                 resp = await raw.post(
-                    url, content=payload, headers=headers, timeout=10.0
+                    url, content=payload, headers=headers, timeout=_DEFAULT_TIMEOUT_S
                 )
         except httpx.RequestError as e:
             raise RuntimeError(f"bybit place_order: {e}") from e

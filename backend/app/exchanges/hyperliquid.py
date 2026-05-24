@@ -37,6 +37,7 @@ _MS_PER_SECOND = 1000
 _HTTP_UNAUTHORIZED = 401
 _HTTP_FORBIDDEN = 403
 _HTTP_BAD_REQUEST = 400
+_DEFAULT_TIMEOUT_S = 10.0
 
 
 class HyperliquidExchange:
@@ -174,7 +175,7 @@ class HyperliquidExchange:
         url = f"{self._base}/exchange"
         try:
             async with httpx.AsyncClient() as raw:
-                resp = await raw.post(url, json=payload, timeout=10.0)
+                resp = await raw.post(url, json=payload, timeout=_DEFAULT_TIMEOUT_S)
         except httpx.RequestError as e:
             raise RuntimeError(f"hyperliquid place_order: {e}") from e
         if resp.status_code in (_HTTP_UNAUTHORIZED, _HTTP_FORBIDDEN):
