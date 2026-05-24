@@ -12,12 +12,16 @@ from app.api import (
     exchanges,
     health,
     live,
+    metrics,
     oms,
     strategy_profiles,
 )
 from app.deps import lifespan
+from app.logging_config import setup_logging
 
-app = FastAPI(title="cryptobot", version="0.19.0", lifespan=lifespan)
+setup_logging()
+
+app = FastAPI(title="cryptobot", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -33,3 +37,4 @@ app.include_router(oms.router)
 app.include_router(decision_audit.router)
 app.include_router(exchanges.router)
 app.include_router(live.router)
+app.include_router(metrics.router)

@@ -1,5 +1,14 @@
 # Changelog
 
+### v1.0.0 (2026-05-24) — feature complete
+
+#### Features
+- Structured JSON logging — `backend/app/logging_config.py` provides `JsonFormatter` + `setup_logging()` that wires the root logger to a stdout `StreamHandler` emitting one JSON line per record (`ts`, `level`, `logger`, `msg`, plus any extras + exception info). `app.main` calls `setup_logging()` at import time so every uvicorn/FastAPI/SQLAlchemy log lands as structured JSON, ready for Loki/CloudWatch/journald aggregation
+- Prometheus `/api/v1/metrics` endpoint — `backend/app/api/metrics.py` exposes `cryptobot_up` (gauge), `cryptobot_decision_audit_total` (counter from `DecisionAuditEntry` row count), `cryptobot_backtest_runs_total` (counter from `BacktestRun` row count), `cryptobot_oms_kill_switch_active` (gauge from active profile). Plain-text Prometheus 0.0.4 format with `# HELP` / `# TYPE` headers, scrape-able on the same port as the API
+- `docs/DEPLOY.md` — production deploy runbook covering env-var checklist, bare-metal install via uv, Docker Compose with `--profile live`, Postgres 6h pg_dump cron to S3, log aggregation patterns (Loki / journald / CloudWatch), Prometheus scrape config, and the rollback procedure (`/oms/kill` → `/live/stop` → compose stop → manual venue close)
+- 2 new tests in `tests/api/test_metrics.py` (format + HELP/TYPE assertions). 290 prior + 2 new = 292 tests pass
+- **v1.0.0 — feature complete.** Subsequent versions are operational tuning (parameter tweaks, bug fixes, profile updates), not new feature code
+
 ### v0.19.0 (2026-05-24)
 
 #### Features
