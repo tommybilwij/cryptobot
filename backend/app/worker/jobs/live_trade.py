@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.deps import get_session_factory
+from app.exchanges.base import Exchange
 from app.exchanges.paper import PaperExchange
 from app.models.strategy_profile import StrategyProfile
 from app.oms.kill_switch import KillSwitch
@@ -60,7 +61,7 @@ async def run() -> None:
         params = ProfileParams(profile=profile.config)
         venue = str(params.get("live.venue"))
         symbol = str(params.get("strategies.funding_arb.default_symbol"))
-        exchanges = {
+        exchanges: dict[str, Exchange] = {
             venue: PaperExchange(
                 venue=venue, params=params, initial_cash=_DEFAULT_INITIAL_CASH
             )

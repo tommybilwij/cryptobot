@@ -9,6 +9,7 @@ from app.api import (
     decision_audit,
     exchanges,
     health,
+    live,
     oms,
     strategy_profiles,
 )
@@ -22,3 +23,4 @@ app.include_router(backtests.router)
 app.include_router(oms.router)
 app.include_router(decision_audit.router)
 app.include_router(exchanges.router)
+app.include_router(live.router)
