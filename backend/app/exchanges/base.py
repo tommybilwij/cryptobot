@@ -31,8 +31,15 @@ class Exchange(Protocol):
         """Submit ``order``. Returns receipt with the venue-assigned ``order_id``."""
         ...
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
-        """Get current status of an order placed via ``place_order``."""
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        """Get current status of an order placed via ``place_order``.
+
+        ``symbol`` is optional for protocol parity but required by some venues
+        (Binance, Bybit) — when omitted those adapters degrade to a pending
+        stub rather than guess the symbol from the order id.
+        """
         ...
 
     async def cancel_order(self, order_id: str) -> None:
@@ -41,4 +48,13 @@ class Exchange(Protocol):
 
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         """Current mark / index / last-price for the (symbol, product) pair."""
+        ...
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        """Most recent perp funding rate for ``symbol``, or ``None`` if unknown.
+
+        Convention: returned as a decimal fraction per funding interval (e.g.
+        ``0.0001`` = 1 bp / interval), matching venue REST conventions. Callers
+        convert to bps/8h as needed via the venue's funding_period_minutes.
+        """
         ...

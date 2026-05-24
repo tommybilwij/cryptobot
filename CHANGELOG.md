@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.7.0 (2026-05-24)
+
+#### Features
+- All 3 REST adapters' `fetch_positions` + `fetch_order` non-stub implementations (Binance `/fapi/v2/positionRisk`, Bybit `/v5/position/list`, Hyperliquid `clearinghouseState` parsing)
+- New `Exchange.fetch_funding_rate(symbol) -> float | None` Protocol method; all 4 adapters implement (Binance `/fapi/v1/premiumIndex`, Bybit `/v5/market/funding/history`, HL `/info` fundingHistory, paper returns configured rate)
+- Hyperliquid `place_order` upgraded from EIP-191 personal_sign to EIP-712 typed-data signing (Phase 7 JSON-stable connection-id formula; needs live testnet calibration to be production-correct)
+- `LiveStateFetcher` service: builds `MarketState` from any `Exchange` (live analogue of `BacktestLoader`)
+- `GET /api/v1/exchanges/health` endpoint: per-venue reachability + balance + testnet flag
+- 7 new exchange-URL string registry keys (`exchanges.{venue}.{spot|perp}_base_url_{testnet|mainnet}`)
+- 3 slow-marker testnet smoke tests (Binance + Bybit + Hyperliquid), opt-in via env keys; HL order-placement calibration gated behind `HYPERLIQUID_SMOKE_PLACE_ORDER=1`
+
 ### v0.6.0 (2026-05-24)
 
 #### Features

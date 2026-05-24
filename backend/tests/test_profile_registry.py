@@ -201,3 +201,18 @@ def test_funding_arb_string_defaults_present() -> None:
 
     assert PROFILE_SCOPED_STRING_DEFAULTS["strategies.funding_arb.default_venue"] == "binance"
     assert PROFILE_SCOPED_STRING_DEFAULTS["strategies.funding_arb.default_symbol"] == "BTCUSDT"
+
+
+def test_exchange_url_defaults_present() -> None:
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+    expected = [
+        "exchanges.binance.spot_base_url_testnet",
+        "exchanges.binance.perp_base_url_testnet",
+        "exchanges.binance.spot_base_url_mainnet",
+        "exchanges.bybit.base_url_testnet",
+        "exchanges.bybit.base_url_mainnet",
+        "exchanges.hyperliquid.base_url_testnet",
+        "exchanges.hyperliquid.base_url_mainnet",
+    ]
+    for key in expected:
+        assert key in PROFILE_SCOPED_STRING_DEFAULTS, f"missing {key}"

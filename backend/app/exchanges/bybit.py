@@ -14,7 +14,7 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -138,11 +138,41 @@ class BybitExchange:
         )
 
     async def fetch_positions(self) -> tuple[ExchangePosition, ...]:
-        # Phase 5: stub. Real implementation needs Bybit's
-        # ``GET /v5/position/list`` paginated across categories
-        # (linear + spot). Empty tuple is correct for a fresh testnet
-        # account; Phase 7 testnet validation will exercise the full path.
-        return ()
+        """Return open perp positions via ``GET /v5/position/list``.
+
+        Queries the ``linear`` category with ``settleCoin=USDT`` (Bybit V5
+        requires either symbol or settleCoin); zero-size rows are filtered.
+        Spot holdings are reported as ``Balance`` rows by ``fetch_balance``,
+        not as positions.
+        """
+        ts_ms = str(int(time.time() * _MS_PER_SECOND))
+        query = "category=linear&settleCoin=USDT"
+        url = f"{self._base}/v5/position/list?{query}"
+        headers = self._headers(ts_ms, query)
+        body = cast(
+            "dict[str, Any]", await self._fetcher.get_json(url, headers=headers)
+        )
+        self._check_response(body)
+        positions: list[ExchangePosition] = []
+        for entry in body.get("result", {}).get("list", []):
+            qty = float(entry.get("size", "0"))
+            if qty == 0.0:
+                continue
+            # Bybit V5 reports side ("Buy"/"Sell") + unsigned size; convert to
+            # signed qty so downstream consumers see direction in a single field.
+            signed_qty = qty if entry.get("side") == "Buy" else -qty
+            positions.append(
+                ExchangePosition(
+                    venue=self.name,
+                    symbol=entry["symbol"],
+                    product="perp",
+                    qty_base=signed_qty,
+                    avg_entry_px=float(entry.get("avgPrice", "0")),
+                    mark_px=float(entry.get("markPrice", "0")),
+                    unrealized_pnl_quote=float(entry.get("unrealisedPnl", "0")),
+                )
+            )
+        return tuple(positions)
 
     async def place_order(self, order: Order) -> OrderReceipt:
         """Submit ``order`` via Bybit V5 ``POST /v5/order/create``.
@@ -191,18 +221,56 @@ class BybitExchange:
             submitted_ts_ms=int(ts_ms),
         )
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
-        # Phase 5: stub. Real Bybit ``GET /v5/order/realtime`` needs the
-        # category (linear|spot) which we'd need to thread through from
-        # the OrderReceipt. Phase 7 testnet validation will exercise the
-        # full path.
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        """Query an order via ``GET /v5/order/realtime`` in the linear category.
+
+        ``symbol`` is accepted for Protocol parity but not required by
+        Bybit's realtime endpoint — ``orderId`` alone is sufficient. The
+        status_map normalises Bybit's enum to ``_OrderStatusLiteral``.
+        """
+        del symbol
+        ts_ms = str(int(time.time() * _MS_PER_SECOND))
+        query = f"category=linear&orderId={order_id}"
+        url = f"{self._base}/v5/order/realtime?{query}"
+        headers = self._headers(ts_ms, query)
+        body = cast(
+            "dict[str, Any]", await self._fetcher.get_json(url, headers=headers)
+        )
+        self._check_response(body)
+        rows = body.get("result", {}).get("list", [])
+        if not rows:
+            return OrderStatus(
+                order_id=order_id,
+                status="pending",
+                fill_px=None,
+                filled_qty_base=0.0,
+                fee_quote=0.0,
+                raw=body,
+            )
+        row = rows[0]
+        status_map: dict[
+            str,
+            Literal["pending", "filled", "partially_filled", "cancelled", "rejected"],
+        ] = {
+            "Filled": "filled",
+            "PartiallyFilled": "partially_filled",
+            "Cancelled": "cancelled",
+            "Rejected": "rejected",
+            "New": "pending",
+        }
+        s = status_map.get(row.get("orderStatus", "New"), "pending")
+        filled = float(row.get("cumExecQty", "0"))
+        cum_value = float(row.get("cumExecValue", "0"))
+        fill_px = cum_value / filled if filled > 0 else None
         return OrderStatus(
             order_id=order_id,
-            status="pending",
-            fill_px=None,
-            filled_qty_base=0.0,
-            fee_quote=0.0,
-            raw={},
+            status=s,
+            fill_px=fill_px,
+            filled_qty_base=filled,
+            fee_quote=float(row.get("cumExecFee", "0")),
+            raw=row,
         )
 
     async def cancel_order(self, order_id: str) -> None:
@@ -217,3 +285,25 @@ class BybitExchange:
         body = cast("dict[str, Any]", await self._fetcher.get_json(url))
         self._check_response(body)
         return float(body["result"]["list"][0]["lastPrice"])
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        """Read most recent funding rate via ``/v5/market/funding/history``.
+
+        Public endpoint (no signing). Returns ``None`` if the venue is
+        unreachable or the symbol is unknown — callers treat missing funding
+        as a soft signal absence, not a hard failure.
+        """
+        url = (
+            f"{self._base}/v5/market/funding/history"
+            f"?category=linear&symbol={symbol}&limit=1"
+        )
+        try:
+            body = cast("dict[str, Any]", await self._fetcher.get_json(url))
+        except RuntimeError:
+            return None
+        if int(body.get("retCode", -1)) != _OK_RET_CODE:
+            return None
+        rows = body.get("result", {}).get("list", [])
+        if not rows:
+            return None
+        return float(rows[0].get("fundingRate", "0"))

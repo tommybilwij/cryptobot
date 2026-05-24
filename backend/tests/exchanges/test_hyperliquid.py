@@ -116,5 +116,83 @@ async def test_place_order_sends_signed_payload() -> None:
     payload = captured["json"]
     assert payload["action"]["type"] == "order"
     assert isinstance(payload["nonce"], int)
-    assert isinstance(payload["signature"], str)
-    assert len(payload["signature"]) > 0
+    # Phase 7: signature is now an EIP-712 {r, s, v} envelope rather than a
+    # personal_sign hex string.
+    sig = payload["signature"]
+    assert isinstance(sig, dict)
+    assert sig["r"].startswith("0x") and len(sig["r"]) == 66
+    assert sig["s"].startswith("0x") and len(sig["s"]) == 66
+    assert isinstance(sig["v"], int)
+
+
+@pytest.mark.asyncio
+async def test_hl_fetch_order_parses_status() -> None:
+    """fetch_order maps HL's status enum to OrderStatus._OrderStatusLiteral."""
+
+    def handler(req: Request) -> Response:
+        body = req.content
+        assert b'"type":"orderStatus"' in body or b'"type": "orderStatus"' in body
+        return Response(
+            200,
+            json={
+                "order": {
+                    "status": "filled",
+                    "px": "60010",
+                    "sz": "0.01",
+                }
+            },
+        )
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = HyperliquidExchange(
+            fetcher=fetcher,
+            params=_params(),
+            wallet_private_key=_TEST_KEY,
+            base_url="https://api.hyperliquid-testnet.xyz",
+        )
+        status = await ex.fetch_order("42")
+    assert status.status == "filled"
+    assert status.fill_px == 60010.0
+    assert status.filled_qty_base == 0.01
+
+
+@pytest.mark.asyncio
+async def test_hl_fetch_funding_rate_parses_history() -> None:
+    """fetch_funding_rate reads the last row of HL fundingHistory."""
+
+    def handler(req: Request) -> Response:
+        body = req.content
+        assert (
+            b'"type":"fundingHistory"' in body
+            or b'"type": "fundingHistory"' in body
+        )
+        # HL returns a JSON array of funding payments.
+        return Response(
+            200,
+            json=[
+                {
+                    "coin": "BTC",
+                    "fundingRate": "0.00005",
+                    "premium": "0.0",
+                    "time": 1699999999000,
+                },
+                {
+                    "coin": "BTC",
+                    "fundingRate": "0.0001",
+                    "premium": "0.0",
+                    "time": 1700000000000,
+                },
+            ],
+        )
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = HyperliquidExchange(
+            fetcher=fetcher,
+            params=_params(),
+            wallet_private_key=_TEST_KEY,
+            base_url="https://api.hyperliquid-testnet.xyz",
+        )
+        rate = await ex.fetch_funding_rate("BTC")
+    assert rate == 0.0001

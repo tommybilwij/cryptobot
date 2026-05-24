@@ -10,7 +10,7 @@ import hashlib
 import hmac
 import time
 import urllib.parse
-from typing import Any
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -78,7 +78,13 @@ class BinanceExchange:
     def _headers(self) -> dict[str, str]:
         return {"X-MBX-APIKEY": self._api_key}
 
-    async def _signed_get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _signed_get(self, path: str, params: dict[str, Any]) -> Any:
+        """Send a signed Binance GET.
+
+        Return type is ``Any`` because Binance endpoints return either an
+        object (``dict``) or an array (``list``) — e.g. ``/fapi/v2/positionRisk``
+        is a JSON array. Callers narrow the type at the use site.
+        """
         params = {
             **params,
             "timestamp": int(time.time() * _MS_PER_SECOND),
@@ -90,7 +96,7 @@ class BinanceExchange:
         except RuntimeError as e:
             self._maybe_raise(e)
             raise
-        return result  # type: ignore[return-value]
+        return result
 
     async def _signed_post(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         """Send a signed Binance POST.
@@ -152,10 +158,32 @@ class BinanceExchange:
         )
 
     async def fetch_positions(self) -> tuple[ExchangePosition, ...]:
-        # Phase 5: stub. Real implementation needs both spot holdings + perp
-        # positionRisk. Returning empty tuple is correct for a fresh testnet
-        # account.
-        return ()
+        """Return open perp positions via ``/fapi/v2/positionRisk``.
+
+        Binance returns a JSON array with one row per (symbol, position-side);
+        zero-quantity rows are placeholders for symbols the account has ever
+        touched and are filtered out. Spot holdings are not included — those
+        are reported as ``Balance`` rows by ``fetch_balance``.
+        """
+        body = await self._signed_get("/fapi/v2/positionRisk", {})
+        rows: list[dict[str, Any]] = body if isinstance(body, list) else []
+        positions: list[ExchangePosition] = []
+        for entry in rows:
+            qty = float(entry["positionAmt"])
+            if qty == 0.0:
+                continue
+            positions.append(
+                ExchangePosition(
+                    venue=self.name,
+                    symbol=entry["symbol"],
+                    product="perp",
+                    qty_base=qty,
+                    avg_entry_px=float(entry["entryPrice"]),
+                    mark_px=float(entry["markPrice"]),
+                    unrealized_pnl_quote=float(entry["unRealizedProfit"]),
+                )
+            )
+        return tuple(positions)
 
     async def place_order(self, order: Order) -> OrderReceipt:
         params: dict[str, Any] = {
@@ -179,17 +207,49 @@ class BinanceExchange:
             ),
         )
 
-    async def fetch_order(self, order_id: str) -> OrderStatus:
-        # Phase 5: stub. Real Binance ``GET /api/v3/order`` requires the
-        # symbol; we'd need to thread that through from the OrderReceipt.
-        # Phase 7 testnet validation will exercise the full path.
+    async def fetch_order(
+        self, order_id: str, symbol: str | None = None
+    ) -> OrderStatus:
+        """Query an order via ``GET /api/v3/order``.
+
+        Binance requires ``symbol`` in the query — without it the only safe
+        response is a pending stub, because the venue refuses orderId-only
+        lookups. The status_map normalises Binance's enum to our
+        ``OrderStatus._OrderStatusLiteral``.
+        """
+        if symbol is None:
+            return OrderStatus(
+                order_id=order_id,
+                status="pending",
+                fill_px=None,
+                filled_qty_base=0.0,
+                fee_quote=0.0,
+                raw={},
+            )
+        body = await self._signed_get(
+            "/api/v3/order", {"symbol": symbol, "orderId": int(order_id)}
+        )
+        status_map: dict[
+            str,
+            Literal["pending", "filled", "partially_filled", "cancelled", "rejected"],
+        ] = {
+            "FILLED": "filled",
+            "PARTIALLY_FILLED": "partially_filled",
+            "CANCELED": "cancelled",
+            "REJECTED": "rejected",
+            "NEW": "pending",
+        }
+        s = status_map.get(body.get("status", "NEW"), "pending")
+        filled = float(body.get("executedQty", "0"))
+        cum_quote = float(body.get("cummulativeQuoteQty", "0"))
+        fill_px = cum_quote / filled if filled > 0 else None
         return OrderStatus(
             order_id=order_id,
-            status="pending",
-            fill_px=None,
-            filled_qty_base=0.0,
+            status=s,
+            fill_px=fill_px,
+            filled_qty_base=filled,
             fee_quote=0.0,
-            raw={},
+            raw=body,
         )
 
     async def cancel_order(self, order_id: str) -> None:
@@ -198,3 +258,19 @@ class BinanceExchange:
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         body = await self._signed_get("/api/v3/ticker/price", {"symbol": symbol})
         return float(body["price"])
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        """Read ``lastFundingRate`` via the public ``/fapi/v1/premiumIndex``.
+
+        Premium index is unsigned (no API key required). Returns ``None`` if
+        the endpoint is unreachable or the symbol is unknown — callers treat
+        missing funding as "no signal" rather than a hard failure.
+        """
+        url = f"{self._base}/fapi/v1/premiumIndex?symbol={symbol}"
+        try:
+            body = await self._fetcher.get_json(url)
+        except RuntimeError:
+            return None
+        if isinstance(body, dict) and "lastFundingRate" in body:
+            return float(cast("str", body["lastFundingRate"]))
+        return None

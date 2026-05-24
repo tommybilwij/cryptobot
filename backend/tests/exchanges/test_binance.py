@@ -104,6 +104,107 @@ async def test_place_market_order_returns_receipt() -> None:
 
 
 @pytest.mark.asyncio
+async def test_binance_fetch_positions_parses_position_risk() -> None:
+    def handler(req: Request) -> Response:
+        assert "/fapi/v2/positionRisk" in req.url.path
+        return Response(
+            200,
+            json=[
+                {
+                    "symbol": "BTCUSDT",
+                    "positionAmt": "-0.5",
+                    "entryPrice": "60000.0",
+                    "markPrice": "60100.0",
+                    "unRealizedProfit": "-50.0",
+                },
+                {
+                    "symbol": "ETHUSDT",
+                    "positionAmt": "0",
+                    "entryPrice": "0",
+                    "markPrice": "3000.0",
+                    "unRealizedProfit": "0",
+                },
+            ],
+        )
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = BinanceExchange(
+            fetcher=fetcher,
+            params=_params(),
+            api_key="t",
+            api_secret="t",
+            base_url="https://testnet.binancefuture.com",
+        )
+        positions = await ex.fetch_positions()
+    # Zero-qty placeholder row is filtered out.
+    assert len(positions) == 1
+    assert positions[0].symbol == "BTCUSDT"
+    assert positions[0].qty_base == -0.5
+    assert positions[0].product == "perp"
+
+
+@pytest.mark.asyncio
+async def test_binance_fetch_funding_rate_parses_premium_index() -> None:
+    def handler(req: Request) -> Response:
+        assert "/fapi/v1/premiumIndex" in req.url.path
+        return Response(
+            200,
+            json={
+                "symbol": "BTCUSDT",
+                "markPrice": "60100.0",
+                "lastFundingRate": "0.0001",
+            },
+        )
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = BinanceExchange(
+            fetcher=fetcher,
+            params=_params(),
+            api_key="t",
+            api_secret="t",
+            base_url="https://testnet.binancefuture.com",
+        )
+        rate = await ex.fetch_funding_rate("BTCUSDT")
+    assert rate == 0.0001
+
+
+@pytest.mark.asyncio
+async def test_binance_fetch_order_parses_open_order() -> None:
+    def handler(req: Request) -> Response:
+        # Signed-GET with symbol + orderId in the query string.
+        query = req.url.query.decode()
+        assert "symbol=BTCUSDT" in query
+        assert "orderId=12345" in query
+        return Response(
+            200,
+            json={
+                "orderId": 12345,
+                "symbol": "BTCUSDT",
+                "status": "FILLED",
+                "executedQty": "0.1",
+                "cummulativeQuoteQty": "6003.0",
+                "side": "BUY",
+            },
+        )
+
+    async with AsyncClient(transport=MockTransport(handler)) as http:
+        fetcher = RetryingFetcher(client=http, base_backoff_s=0.0)
+        ex = BinanceExchange(
+            fetcher=fetcher,
+            params=_params(),
+            api_key="t",
+            api_secret="t",
+            base_url="https://testnet.binance.vision",
+        )
+        status = await ex.fetch_order("12345", symbol="BTCUSDT")
+    assert status.status == "filled"
+    assert status.filled_qty_base == 0.1
+    assert status.fill_px == 60030.0
+
+
+@pytest.mark.asyncio
 async def test_auth_failure_raises() -> None:
     def handler(req: Request) -> Response:
         return Response(401, json={"code": -2014, "msg": "API-key format invalid."})

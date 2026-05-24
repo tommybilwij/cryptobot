@@ -1,6 +1,6 @@
 [project]
 name = "cryptobot-backend"
-version = "0.6.0"
+version = "0.7.0"
 description = "Cryptobot backend — FastAPI + profile system"
 requires-python = ">=3.12"
 dependencies = [
