@@ -14,8 +14,14 @@ from __future__ import annotations
 import math
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from app.risk.component_graveyard import ComponentGraveyard
+
+if TYPE_CHECKING:
+    from app.services.runner_state import RunnerStateService
+
+_IC_TRACKER_STATE_KEY = "ic_tracker"
 
 _MIN_SAMPLES_FOR_CORR = 3
 _MIN_RANK_PAIRS = 2
@@ -37,8 +43,15 @@ class ICSnapshot:
 
 
 class ICTracker:
-    def __init__(self, *, max_samples: int = 1000) -> None:
+    def __init__(
+        self,
+        *,
+        max_samples: int = 1000,
+        runner_state: RunnerStateService | None = None,
+    ) -> None:
+        self._max_samples = max_samples
         self._records: dict[str, deque[ICRecord]] = defaultdict(lambda: deque(maxlen=max_samples))
+        self._runner_state = runner_state
 
     def record(
         self,
@@ -94,6 +107,49 @@ class ICTracker:
             )
             return True
         return False
+
+    async def persist(self) -> None:
+        """Write the full record set to ``runner_state.ic_tracker``.
+
+        Stores a flat list of records tagged by component, so the same key
+        round-trips through ``hydrate()`` without per-component fan-out.
+        No-op when no ``RunnerStateService`` was wired in.
+        """
+        if self._runner_state is None:
+            return
+        records: list[dict[str, float | int | str]] = []
+        for component, deck in self._records.items():
+            for rec in deck:
+                records.append(
+                    {
+                        "component": component,
+                        "ts_ms": rec.ts_ms,
+                        "score": rec.score,
+                        "forward_return": rec.forward_return,
+                    }
+                )
+        await self._runner_state.set(_IC_TRACKER_STATE_KEY, {"records": records})
+
+    async def hydrate(self) -> None:
+        """Repopulate in-memory deques from ``runner_state.ic_tracker``.
+
+        No-op when no service is wired in or no row exists. Existing in-memory
+        records are cleared first so hydrate is idempotent across restarts.
+        """
+        if self._runner_state is None:
+            return
+        stored = await self._runner_state.get(_IC_TRACKER_STATE_KEY)
+        if stored is None:
+            return
+        self._records = defaultdict(lambda: deque(maxlen=self._max_samples))
+        for raw in stored.get("records", []):
+            self._records[str(raw["component"])].append(
+                ICRecord(
+                    ts_ms=int(raw["ts_ms"]),
+                    score=float(raw["score"]),
+                    forward_return=float(raw["forward_return"]),
+                )
+            )
 
 
 def _spearman_rank_corr(xs: list[float], ys: list[float]) -> float:

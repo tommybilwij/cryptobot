@@ -24,6 +24,7 @@ from app.risk.exceptions import DrawdownBrakeHalt
 from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
 from app.services.live_runner import LiveRunner
+from app.services.runner_state import RunnerStateService
 
 
 class _StubStrategy:
@@ -54,6 +55,7 @@ def _build_runner(
     profile: StrategyProfile,
     initial_cash: float = 10_000.0,
     alerter: Alerter | AsyncMock | None = None,
+    runner_state: RunnerStateService | None = None,
 ) -> tuple[LiveRunner, PaperExchange, AsyncMock]:
     paper = PaperExchange(venue="binance", params=params, initial_cash=initial_cash)
     paper.set_mark_price("BTCUSDT", "spot", 60_000.0)
@@ -83,6 +85,7 @@ def _build_runner(
         profile_id=profile.id,
         profile_version=profile.version,
         profile_hash="abc",
+        runner_state=runner_state,
     )
     return runner, paper, resolved_alerter
 
@@ -293,3 +296,47 @@ async def test_runner_alerts_on_drawdown_brake(db_session: AsyncSession) -> None
     assert len(critical_calls) == 1
     assert "equity" in critical_calls[0].kwargs["details"]
     assert "peak" in critical_calls[0].kwargs["details"]
+
+
+@pytest.mark.asyncio
+async def test_runner_hydrates_peak_from_state(db_session: AsyncSession) -> None:
+    """``hydrate()`` seeds the brake from the persisted ``peak_equity`` row."""
+    profile = await _make_profile(db_session)
+    state_svc = RunnerStateService(db_session)
+    await state_svc.set("peak_equity", {"value": 12_345.67, "ts_ms": 999})
+    params = ProfileParams(profile={"live": {"enabled": True}})
+    runner, _, _ = _build_runner(
+        db_session=db_session,
+        params=params,
+        strategy=_StubStrategy([]),
+        profile=profile,
+        runner_state=state_svc,
+    )
+
+    await runner.hydrate()
+
+    assert runner._brake.peak == 12_345.67
+
+
+@pytest.mark.asyncio
+async def test_runner_persists_new_peak(db_session: AsyncSession) -> None:
+    """Tick that ratchets the peak writes back to ``runner_state.peak_equity``."""
+    profile = await _make_profile(db_session)
+    state_svc = RunnerStateService(db_session)
+    # initial_cash 10_000 + zero positions → equity 10_000, fresh peak.
+    params = ProfileParams(profile={"live": {"enabled": True}})
+    runner, _, _ = _build_runner(
+        db_session=db_session,
+        params=params,
+        strategy=_StubStrategy([]),
+        profile=profile,
+        initial_cash=10_000.0,
+        runner_state=state_svc,
+    )
+
+    await runner.run_one_tick()
+
+    persisted = await state_svc.get("peak_equity")
+    assert persisted is not None
+    assert persisted["value"] == 10_000.0
+    assert "ts_ms" in persisted
