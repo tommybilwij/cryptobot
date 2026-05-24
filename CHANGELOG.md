@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.6.0 (2026-05-24)
+
+#### Features
+- Strategy A — `FundingArbStrategy` in `backend/app/strategies/funding_arb.py`: delta-neutral long-spot + short-perp when 8h funding ≥ entry threshold (default 8 bps); closes hedge when funding decays below exit threshold (default 4 bps); hysteresis prevents churn
+- `MarketSnapshot.funding_rates: dict[tuple[str, str], float]` field (default_factory dict) — backward-compatible
+- `BacktestLoader` populates per-tick funding rates from Parquet alongside klines
+- Strategy registered in `StrategyRegistry.default()` as `"funding_arb"`; `BacktestService` routes it with `products=["spot", "perp"]`
+- 3 new registry numeric keys consolidated under existing `strategies.funding_arb.*` namespace: `max_notional_usdc`, `max_cash_fraction`, `intervals_per_year` (Phase 6 sizing knobs alongside Phase 1+2 thresholds)
+- 11 unit tests covering 4-state machine (flat / hedged / orphan spot / orphan perp), sizing caps, and a 6-tick hysteresis sweep
+- 1 engine E2E test runs the strategy over hand-crafted Parquet + funding event
+
 ### v0.5.0 (2026-05-24)
 
 #### Features

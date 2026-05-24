@@ -6,7 +6,7 @@ position bookkeeping; strategies are pure.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 Product = Literal["spot", "perp"]
@@ -29,6 +29,11 @@ class Bar:
 class MarketSnapshot:
     ts_ms: int
     bars: dict[tuple[str, str, Product], Bar]
+    # Per-tick funding rates keyed by (venue, symbol). Empty by default to
+    # keep every existing construction site backward-compatible — only the
+    # backtest loader and live feed populate this field when funding data
+    # is available for the current bar timestamp.
+    funding_rates: dict[tuple[str, str], float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

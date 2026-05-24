@@ -52,7 +52,7 @@ class BacktestService:
             )
             products: list[Product] = (
                 ["spot", "perp"]
-                if run.strategy_name == "funding_arb_skeleton"
+                if run.strategy_name in {"funding_arb_skeleton", "funding_arb"}
                 else ["spot"]
             )
             opts = RunOptions(

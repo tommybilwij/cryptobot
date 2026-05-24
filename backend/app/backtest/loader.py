@@ -47,6 +47,14 @@ class BacktestLoader:
                 f"no data for {venue} {symbols} {products} in [{start}, {end}]"
             )
 
+        # Preload funding rates per (venue, symbol), indexed by ts_ms.
+        # We index by ts_ms so per-tick lookup is O(1) — funding events are
+        # sparse (~1 every 8h on Binance perp) but bars are dense (1/min), so
+        # this dict is small and the snapshot inner loop stays cheap.
+        funding_index = self._build_funding_index(
+            venue=venue, symbols=symbols, start=start, end=end
+        )
+
         # union of all bar timestamps across symbol/product combos
         all_ts: set[int] = set()
         for df in frames.values():
@@ -69,7 +77,19 @@ class BacktestLoader:
                     close=float(row["close"][0]),
                     volume=float(row["volume"][0]),
                 )
-            yield MarketSnapshot(ts_ms=ts_ms, bars=bars)
+
+            # Surface funding rates for any (venue, symbol) that has a
+            # funding event at this exact ts_ms. Most ticks will produce
+            # an empty dict, matching the MarketSnapshot default.
+            funding_rates: dict[tuple[str, str], float] = {}
+            for vs_key, ts_to_rate in funding_index.items():
+                rate = ts_to_rate.get(ts_ms)
+                if rate is not None:
+                    funding_rates[vs_key] = rate
+
+            yield MarketSnapshot(
+                ts_ms=ts_ms, bars=bars, funding_rates=funding_rates
+            )
 
     def load_funding(
         self,
@@ -88,3 +108,32 @@ class BacktestLoader:
         if df.height == 0:
             return None
         return df
+
+    def _build_funding_index(
+        self,
+        *,
+        venue: str,
+        symbols: list[str],
+        start: datetime,
+        end: datetime,
+    ) -> dict[tuple[str, str], dict[int, float]]:
+        """Preload funding rates per (venue, symbol), indexed by ts_ms.
+
+        Extracted from `iter_snapshots` so the snapshot loop stays under
+        the branch-complexity limit. Returns an empty dict when no funding
+        data exists for any requested symbol.
+        """
+        funding_index: dict[tuple[str, str], dict[int, float]] = {}
+        for symbol in symbols:
+            fdf = self.load_funding(
+                venue=venue, symbol=symbol, start=start, end=end
+            )
+            if fdf is None:
+                continue
+            ts_to_rate: dict[int, float] = {}
+            for funding_row in fdf.iter_rows(named=True):
+                ts_to_rate[int(funding_row["ts_ms"])] = float(
+                    funding_row["realized"]
+                )
+            funding_index[(venue, symbol)] = ts_to_rate
+        return funding_index

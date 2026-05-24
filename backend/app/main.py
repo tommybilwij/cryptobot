@@ -13,7 +13,7 @@ from app.api import (
 )
 from app.deps import lifespan
 
-app = FastAPI(title="cryptobot", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="cryptobot", version="0.6.0", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(strategy_profiles.router)
 app.include_router(data_health.router)

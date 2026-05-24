@@ -55,3 +55,17 @@ def test_market_state_positions_are_tuple() -> None:
         cash_quote=10000.0,
     )
     assert isinstance(state.positions, tuple)
+
+
+def test_market_snapshot_funding_rates_default_empty() -> None:
+    snap = MarketSnapshot(ts_ms=1, bars={})
+    assert snap.funding_rates == {}
+
+
+def test_market_snapshot_carries_funding_rates() -> None:
+    snap = MarketSnapshot(
+        ts_ms=1,
+        bars={},
+        funding_rates={("binance", "BTCUSDT"): 0.0001},
+    )
+    assert snap.funding_rates[("binance", "BTCUSDT")] == 0.0001

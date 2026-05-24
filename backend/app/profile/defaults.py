@@ -36,6 +36,10 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "strategies.funding_arb.spot_post_only_ttl_s": 60,
     "strategies.funding_arb.use_predicted_funding": 1.0,
     "strategies.funding_arb.reconcile_interval_s": 15,
+    # Phase 6 sizing knobs (read by FundingArbStrategy.evaluate)
+    "strategies.funding_arb.max_notional_usdc": 5_000.0,
+    "strategies.funding_arb.max_cash_fraction": 0.5,
+    "strategies.funding_arb.intervals_per_year": 1095.75,
 
     # ── Strategy B — factor portfolio ────────────────────────────────────
     "strategies.factor_portfolio.enabled": 1.0,
@@ -144,6 +148,9 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
 PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str] = {
     "strategies.funding_arb.perp_execution": "market",
     "strategies.funding_arb.sub_account": "strategy_a_arb",
+    # Strategy A — funding arb (Phase 6 strategy-level string defaults).
+    "strategies.funding_arb.default_venue": "binance",
+    "strategies.funding_arb.default_symbol": "BTCUSDT",
     "strategies.factor_portfolio.rebalance_cron": "0 8 * * *",
     "strategies.factor_portfolio.neutral_holding": "USDC",
     "strategies.factor_portfolio.sub_account": "strategy_b_pf",

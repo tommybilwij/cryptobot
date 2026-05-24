@@ -63,3 +63,47 @@ def test_loader_raises_when_no_data(tmp_path: Path) -> None:
                 end=end,
             )
         )
+
+
+def test_loader_populates_funding_rates(tmp_path: Path) -> None:
+    store = ParquetStore(root=tmp_path)
+    base = 1704067200000
+    # klines
+    kline_df = pl.DataFrame(
+        {
+            "ts_ms": [base, base + 60_000, base + 120_000],
+            "open": [60000.0, 60100.0, 60200.0],
+            "high": [60050.0, 60150.0, 60250.0],
+            "low": [59950.0, 60050.0, 60150.0],
+            "close": [60010.0, 60110.0, 60210.0],
+            "volume": [10.0, 11.0, 12.0],
+        }
+    )
+    store.write_klines("binance", "BTCUSDT", kline_df, year=2024, month=1)
+    # funding (one rate at base + 120_000)
+    funding_df = pl.DataFrame(
+        {
+            "ts_ms": [base + 120_000],
+            "predicted": [0.0002],
+            "realized": [0.00015],
+        }
+    )
+    store.write_funding("binance", "BTCUSDT", funding_df, year=2024, month=1)
+
+    loader = BacktestLoader(parquet_root=tmp_path)
+    start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+    end = datetime(2024, 1, 1, 0, 2, 0, tzinfo=UTC)
+    snaps = list(
+        loader.iter_snapshots(
+            venue="binance",
+            symbols=["BTCUSDT"],
+            products=["spot"],
+            start=start,
+            end=end,
+        )
+    )
+    # First 2 bars: no funding event yet, expect empty dict
+    assert snaps[0].funding_rates == {}
+    assert snaps[1].funding_rates == {}
+    # Third bar: funding event at this ts
+    assert snaps[2].funding_rates == {("binance", "BTCUSDT"): 0.00015}
