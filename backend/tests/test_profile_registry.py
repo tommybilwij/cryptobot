@@ -216,3 +216,57 @@ def test_exchange_url_defaults_present() -> None:
     ]
     for key in expected:
         assert key in PROFILE_SCOPED_STRING_DEFAULTS, f"missing {key}"
+
+
+def test_live_tick_interval_default() -> None:
+    """Phase 8: live.tick_interval_s = 60.0 (float)."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["live.tick_interval_s"] == 60.0
+    assert isinstance(PROFILE_SCOPED_DEFAULTS["live.tick_interval_s"], float)
+
+
+def test_live_snapshot_interval_default() -> None:
+    """Phase 8: live.snapshot_interval_s = 3600.0 (hourly heartbeat)."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["live.snapshot_interval_s"] == 3600.0
+    assert isinstance(PROFILE_SCOPED_DEFAULTS["live.snapshot_interval_s"], float)
+
+
+def test_live_cold_start_grace_default() -> None:
+    """Phase 8: live.cold_start_grace_s = 300.0 (5-minute warm-up)."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["live.cold_start_grace_s"] == 300.0
+    assert isinstance(PROFILE_SCOPED_DEFAULTS["live.cold_start_grace_s"], float)
+
+
+def test_drawdown_brake_peak_equity_default() -> None:
+    """Phase 8 brake seeds initial peak from profile; 0.0 → cold start."""
+    from app.profile.defaults import PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["risk.drawdown_brake.peak_equity"] == 0.0
+    assert isinstance(PROFILE_SCOPED_DEFAULTS["risk.drawdown_brake.peak_equity"], float)
+
+
+def test_live_enabled_default_false() -> None:
+    """Default-safe: live.enabled = False (master gate off)."""
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    assert PROFILE_SCOPED_BOOL_DEFAULTS["live.enabled"] is False
+
+
+def test_live_dry_run_mode_default_true() -> None:
+    """Default-safe: live.dry_run_mode = True (paper exchange in-memory)."""
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS
+
+    assert PROFILE_SCOPED_BOOL_DEFAULTS["live.dry_run_mode"] is True
+
+
+def test_live_venue_string_default() -> None:
+    """Phase 8: live.venue = 'binance'."""
+    from app.profile.defaults import PROFILE_SCOPED_STRING_DEFAULTS
+
+    assert PROFILE_SCOPED_STRING_DEFAULTS["live.venue"] == "binance"
+    assert isinstance(PROFILE_SCOPED_STRING_DEFAULTS["live.venue"], str)

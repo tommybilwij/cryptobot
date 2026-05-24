@@ -85,6 +85,7 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "risk.drawdown_brake.trigger_pct": 0.05,
     "risk.drawdown_brake.full_pct": 0.15,
     "risk.drawdown_brake.min_mult": 0.25,
+    "risk.drawdown_brake.peak_equity": 0.0,
     "risk.black_swan_circuit.enabled": 1.0,
     "risk.black_swan_circuit.move_pct": 0.08,
     "risk.black_swan_circuit.window_minutes": 5,
@@ -131,6 +132,11 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "backtest.funding_arb_skeleton.hedge_size_fraction": 0.5,
     "metrics.minutes_per_year": 525_600,
 
+    # ── Live runner (Phase 8) ───────────────────────────────────────────
+    "live.tick_interval_s": 60.0,
+    "live.snapshot_interval_s": 3600.0,
+    "live.cold_start_grace_s": 300.0,
+
     # ── Data health ─────────────────────────────────────────────────────
     "data_health.max_age_s.trades": 60,
     "data_health.max_age_s.klines": 120,
@@ -170,6 +176,8 @@ PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str] = {
     "exchanges.bybit.base_url_mainnet": "https://api.bybit.com",
     "exchanges.hyperliquid.base_url_testnet": "https://api.hyperliquid-testnet.xyz",
     "exchanges.hyperliquid.base_url_mainnet": "https://api.hyperliquid.xyz",
+    # ── Live runner (Phase 8) ────────────────────────────────────────────
+    "live.venue": "binance",
 }
 
 
@@ -243,6 +251,9 @@ PROFILE_SCOPED_BOOL_DEFAULTS: dict[str, bool] = {
     "exchanges.binance.use_testnet": True,
     "exchanges.bybit.use_testnet": True,
     "exchanges.hyperliquid.use_testnet": True,
+    # ── Live runner (Phase 8) ────────────────────────────────────────────
+    "live.enabled": False,
+    "live.dry_run_mode": True,
 }
 
 
