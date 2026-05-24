@@ -28,5 +28,12 @@ class Settings(BaseSettings):
         alias="TEST_DATABASE_URL",
     )
 
+    # --- Exchange API keys (env-only, never in DB) ---
+    binance_api_key: str = ""
+    binance_api_secret: str = ""
+    bybit_api_key: str = ""
+    bybit_api_secret: str = ""
+    hyperliquid_wallet_private_key: str = ""
+
 
 settings = Settings()
