@@ -22,10 +22,10 @@ from app.logging_config import setup_logging
 
 setup_logging()
 
-app = FastAPI(title="cryptobot", version="1.12.0", lifespan=lifespan)
+app = FastAPI(title="cryptobot", version="1.12.1", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
