@@ -1,5 +1,13 @@
 # Changelog
 
+### v0.15.0 (2026-05-24)
+
+#### Features
+- `FactorPortfolioStrategy` (Strategy B) — ranks a configured universe by `ScoringEngine` composite total, opens equal-weight longs in the top decile, and (if `strategies.factor_portfolio.shorts_enabled` > 0) opens equal-weight shorts in the bottom decile. Single rebalance per `evaluate()` call: stale positions get close orders, new top/bottom symbols get open orders sized as `cash_quote / target_count` over the current spot close
+- Registered as `"factor_portfolio"` in `StrategyRegistry.default()` — the same name the API endpoint and worker job validate against, so live + backtest instantiate from the same registry
+- Phase 15 simplification: only the `funding_yield` feature is wired to real data (per-tick funding × `strategies.funding_arb.intervals_per_year`); `momentum_30d` / `realized_vol` / `volume_rank` default to 0.0 until Phase 16+ adds the rolling/cross-sectional pipelines
+- 6 new tests in `tests/strategies/test_factor_portfolio.py` covering empty universe, top-decile selection across a 10-symbol universe, missing funding data, missing bars, stale-long close-out, and registry resolution. 266 prior + 6 = 272 tests pass
+
 ### v0.14.0 (2026-05-24)
 
 #### Features
