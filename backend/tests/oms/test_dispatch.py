@@ -130,3 +130,49 @@ async def test_dispatch_unconfigured_venue_raises(db_session: AsyncSession) -> N
             profile_version=1,
             profile_hash="abc",
         )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_hedge_drift_raises(db_session: AsyncSession) -> None:
+    from app.backtest.state import Position
+    from app.oms.exceptions import HedgeDriftHalt
+
+    params = ProfileParams(profile={})
+    paper = PaperExchange(venue="binance", params=params, initial_cash=10_000.0)
+    paper.set_mark_price("BTCUSDT", "spot", 60000.0)
+
+    profile = StrategyProfile(name="oms-hedge", version=1, is_active=False, config={})
+    db_session.add(profile)
+    await db_session.flush()
+
+    # Synthetic state: spot 0.1, perp -0.11 → 10% drift, > 5% threshold
+    drifted_state = MarketState(
+        snapshot=MarketSnapshot(ts_ms=1714521600000, bars={}),
+        positions=(
+            Position(venue="binance", symbol="BTCUSDT", product="spot",
+                     qty_base=0.1, avg_entry_px=60000.0),
+            Position(venue="binance", symbol="BTCUSDT", product="perp",
+                     qty_base=-0.11, avg_entry_px=60000.0),
+        ),
+        cash_quote=10_000.0,
+    )
+
+    oms = OMS(
+        exchanges={"binance": paper},
+        audit_service=DecisionAuditService(db_session),
+        params=params,
+        kill_switch=KillSwitch(params=params),
+        reconciler=PositionReconciler(params=params),
+        ledger=MultiVenueCashLedger(),
+    )
+
+    # Empty orders list — no exchange interaction; just trigger reconciliation
+    with pytest.raises(HedgeDriftHalt):
+        await oms.dispatch(
+            orders=[],
+            state=drifted_state,
+            strategy_name="test_strategy",
+            profile_id=profile.id,
+            profile_version=1,
+            profile_hash="abc",
+        )

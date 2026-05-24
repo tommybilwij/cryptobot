@@ -176,20 +176,24 @@ class OMS:
                 f"auth failed during dispatch; audit_entry_id={entry.id}"
             ) from e
 
-        # 4. Reconcile (book vs exchange + hedge consistency). Runs
-        #    unconditionally — empty-orders dispatch still needs to detect
-        #    pre-existing drift in the book.
+        # 4. Reconcile. Runs unconditionally — empty-orders dispatch still
+        #    needs hedge-consistency to fire on pre-existing book drift.
+        #    Book-vs-exchange only runs when we actually touched a venue (no
+        #    orders → no exchange snapshot to compare against).
         reconciliation_status = _STATUS_OK
         reason: str | None = None
         try:
             touched_venues: set[str] = {o.venue for o in orders}
-            ex_positions: list[ExchangePosition] = []
-            for venue in touched_venues:
-                ex_positions.extend(await self._exchanges[venue].fetch_positions())
-            self._reconciler.check_book_vs_exchange(
-                book_positions=state.positions,
-                exchange_positions=tuple(ex_positions),
-            )
+            if touched_venues:
+                ex_positions: list[ExchangePosition] = []
+                for venue in touched_venues:
+                    ex_positions.extend(
+                        await self._exchanges[venue].fetch_positions()
+                    )
+                self._reconciler.check_book_vs_exchange(
+                    book_positions=state.positions,
+                    exchange_positions=tuple(ex_positions),
+                )
             self._reconciler.check_hedge_consistency(positions=state.positions)
         except HedgeDriftHalt as e:
             reconciliation_status = _STATUS_HALTED_HEDGE_DRIFT
