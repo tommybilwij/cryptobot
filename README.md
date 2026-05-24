@@ -267,6 +267,48 @@ Each smoke test skips cleanly when the relevant env keys are missing. HL signing
 - WebSocket fills → Phase 9+
 - Mainnet → Phase 9
 
+## Dry-run + Live runner (Phase 8)
+
+The live runner loop ties Strategy A → OMS → exchange adapters into a continuous
+cycle. **Default-safe**: `live.enabled=False` AND `live.dry_run_mode=True` — even
+if you fire the worker, nothing trades real money.
+
+### Toggles (in active profile)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `live.enabled` | `False` | Master gate. `False` → loop skips every tick. |
+| `live.dry_run_mode` | `True` | `True` → PaperExchange in-memory fills. `False` → real adapter (Phase 9). |
+| `live.tick_interval_s` | `60.0` | Seconds between loop iterations. |
+| `live.snapshot_interval_s` | `3600.0` | Hourly heartbeat snapshot to DecisionAuditEntry. |
+| `live.venue` | `"binance"` | Which venue adapter to use. |
+| `risk.drawdown_brake.trigger_pct` | `0.05` | Halt loop if equity drops 5% from peak. |
+
+### Run locally
+
+```bash
+just live-trade
+```
+
+### Run via Docker
+
+```bash
+docker compose --profile live up worker-live-trade
+```
+
+### Status + stop
+
+```bash
+curl http://localhost:8000/api/v1/live/status
+curl -X POST http://localhost:8000/api/v1/live/stop
+```
+
+### Deferred
+
+- **Real money** → Phase 9 (after dry-run validates over days/weeks)
+- **Kelly + vol-target sizing** → Phase 10+
+- **WebSocket fills** → Phase 11+
+
 ## Layout
 
 ```
