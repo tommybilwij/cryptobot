@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.9.0 (2026-05-24)
+
+#### Features
+- `exchange_factory.build_exchange()` — dry-run-aware adapter builder. Returns PaperExchange in dry-run mode OR a real adapter from env keys, with paper fallback when keys are missing (defence in depth)
+- `Alerter` service — POSTs halt-class events to `alerts.webhook_url` (Discord/Slack/Telegram-compatible). Empty URL = no-op; never throws (swallows webhook failures so the runner stays alive)
+- `live_trade` worker wires real adapters (Binance + Bybit + Hyperliquid) via the factory; LiveRunner calls Alerter on `DrawdownBrakeHalt`, `KillSwitchActive`, `HedgeDriftHalt`, `ReconciliationDriftHalt`, and opt-in hourly heartbeats
+- `/api/v1/exchanges/health` uses factory — pings real adapters when env keys present, falls back to PaperExchange otherwise
+- 4 new alerts registry keys: `alerts.webhook_url`, `alerts.heartbeat_severity`, `alerts.send_heartbeats`, `alerts.timeout_s`
+- README Phase 9 runbook: pre-flight checklist, flag-flip sequence, rollback, webhook payload shape
+- 12 new tests (4 registry + 3 alerter + 5 factory + 1 alerter-on-drawdown)
+
 ### v0.8.0 (2026-05-24)
 
 #### Features
