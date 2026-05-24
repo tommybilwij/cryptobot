@@ -182,6 +182,43 @@ curl http://localhost:8000/api/v1/decision-audit/recent
 - `ReconciliationDriftHalt` — book vs exchange drift > `oms.reconcile_drift_halt_pct` (default 2%)
 - `UnconfiguredVenueError` — strategy emitted an order for a venue not in the OMS exchange map
 
+## Strategy A — Funding Arb (Phase 6)
+
+Delta-neutral funding-rate arbitrage. Goes long spot + short perp when 8-hour
+funding is above the entry threshold; closes the hedge when funding decays
+below the exit threshold.
+
+### Backtest
+
+```bash
+# Profile must exist; use any of the seeded profiles or create your own
+curl -X POST http://localhost:8000/api/v1/backtests -H "Content-Type: application/json" -d '{
+  "profile_id": "<uuid>",
+  "strategy_name": "funding_arb",
+  "start_ts": "2024-01-01T00:00:00Z",
+  "end_ts":   "2024-01-31T23:59:00Z",
+  "venue":    "binance",
+  "symbols": ["BTCUSDT"]
+}'
+```
+
+### Profile knobs (all in the registry)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `strategies.funding_arb.entry_bps_per_8h` | 8.0 | Open hedge when funding ≥ this |
+| `strategies.funding_arb.exit_bps_per_8h` | 4.0 | Close hedge when funding ≤ this |
+| `strategies.funding_arb.max_notional_usdc` | 5_000.0 | Hard cap on spot-leg notional |
+| `strategies.funding_arb.max_cash_fraction` | 0.5 | Don't deploy >50% of free cash |
+| `strategies.funding_arb.intervals_per_year` | 1095.75 | 365.25 × 24 / 8h, for APR conversion |
+
+### Deferred to later phases
+
+- **Live trading** → Phase 7 (testnet) → Phase 8 (dry-run) → Phase 9 (live $500)
+- **Kelly / vol-target sizing** → Phase 8 risk machinery
+- **Cross-venue best-execution routing** → Phase 9+
+- **Multi-symbol portfolios** → Phase 13+
+
 ## Layout
 
 ```
