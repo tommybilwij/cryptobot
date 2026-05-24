@@ -12,6 +12,7 @@ from typing import Any
 from app.backtest.strategies.base import Strategy
 from app.backtest.strategies.buy_and_hold import BuyAndHoldStrategy
 from app.backtest.strategies.funding_arb_skeleton import FundingArbSkeleton
+from app.strategies.funding_arb import FundingArbStrategy
 
 
 class UnknownStrategy(KeyError):
@@ -30,6 +31,7 @@ class StrategyRegistry:
             {
                 "buy_and_hold": BuyAndHoldStrategy,
                 "funding_arb_skeleton": FundingArbSkeleton,
+                "funding_arb": FundingArbStrategy,
             }
         )
 

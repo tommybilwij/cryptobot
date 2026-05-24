@@ -30,3 +30,10 @@ def test_names_returns_registered_strategies() -> None:
     names = reg.names()
     assert "buy_and_hold" in names
     assert "funding_arb_skeleton" in names
+    assert "funding_arb" in names
+
+
+def test_resolve_funding_arb() -> None:
+    reg = StrategyRegistry.default()
+    s = reg.build("funding_arb", venue="binance", symbol="BTCUSDT")
+    assert s.name == "funding_arb"
