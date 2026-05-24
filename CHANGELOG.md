@@ -1,5 +1,16 @@
 # Changelog
 
+### v0.19.0 (2026-05-24)
+
+#### Features
+- Strategy Lab UI scaffold — Next.js 15 + Tailwind frontend in `frontend/`. App Router with top-bar nav (`/`, `/profiles`, `/oms`, `/live`, `/audit`, `/exchanges`)
+- `/oms` is wired and live: polls `GET /api/v1/oms/status` every 5s, renders kill-switch state, active profile id/version, last dispatch ts + reconciliation status, and per-venue configured / testnet badges. Kill button POSTs to `/api/v1/oms/kill` with a manual reason
+- `frontend/src/lib/api.ts` — minimal `apiGet` / `apiPost` helpers reading `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`). `cache: "no-store"` on every fetch — no Next.js caching footgun
+- `StatusBadge` shared component for green/dim active-state pills used across the OMS page
+- `/profiles`, `/live`, `/audit`, `/exchanges` ship as Phase 20+ placeholders so the nav resolves now and the routes have an obvious slot to land into later
+- Backend CORS — `CORSMiddleware` added in `backend/app/main.py` with `allow_origins=["http://localhost:3000"]` so the dev UI can reach the API
+- No new backend tests; existing 290 tests still pass. No frontend test infra yet — added in a later phase
+
 ### v0.16.0 (2026-05-24)
 
 #### Features

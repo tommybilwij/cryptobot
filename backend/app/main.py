@@ -17,7 +17,7 @@ from app.api import (
 )
 from app.deps import lifespan
 
-app = FastAPI(title="cryptobot", version="0.18.0", lifespan=lifespan)
+app = FastAPI(title="cryptobot", version="0.19.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
