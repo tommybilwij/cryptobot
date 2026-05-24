@@ -1,5 +1,14 @@
 # Changelog
 
+### v1.9.0 (2026-05-24) — Hardening Pass 10: WS into OMS + listen-key refresh + load harness
+
+#### Features
+- OMS accepts optional `ws_clients: dict[str, WSClient]` per-venue. When a venue has a client, `_poll_until_terminal` waits on `WSClient.next_fill_for(order_id, timeout_s=oms.max_fill_wait_s)` for a push fill, falling back to REST `fetch_order` polling on WS timeout
+- `_status_from_ws_msg` normalises Binance (`executionReport`), Bybit V5 execution, and Hyperliquid (`userFills`) message shapes to a unified `OrderStatus`
+- `ListenKeyKeepalive` (`backend/app/exchanges/ws/binance_listen_key.py`) — async PUT-every-30-min keepalive task for the Binance user-data listenKey. Refresh errors are logged and retried; WS disconnect remains the source of truth for key death
+- Load test harness (`backend/tests/load/test_concurrent_backtests.py`, `just load-test`) — N=5 sequential `BacktestService.execute` runs as a smoke for resource-handle accumulation. Slow-marker; deselected by default
+- 335 prior + 2 OMS WS dispatch tests + 1 listen-key refresh test = 338 tests pass; 1 slow load test deselected
+
 ### v1.8.0 (2026-05-24) — Hardening Pass 9: frontend polish
 
 #### Features

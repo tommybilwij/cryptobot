@@ -117,3 +117,53 @@ async def test_hyperliquid_ws_finds_fill_by_oid() -> None:
     msg = await ws.next_fill_for("42", timeout_s=1.0)
     assert msg is not None
     assert msg["px"] == "60100"
+
+
+@pytest.mark.asyncio
+async def test_listen_key_refresh_calls_put() -> None:
+    """ListenKeyKeepalive._refresh issues a PUT with the API key header."""
+    from app.exchanges.ws.binance_listen_key import ListenKeyKeepalive
+    from app.market_data._http import RetryingFetcher
+
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _FakeAsyncClient:
+        async def __aenter__(self) -> _FakeAsyncClient:
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def put(self, url: str, *, headers: dict, timeout: float) -> _FakeResponse:
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["timeout"] = timeout
+            return _FakeResponse()
+
+    import httpx
+
+    def _make_client() -> _FakeAsyncClient:
+        return _FakeAsyncClient()
+
+    async with httpx.AsyncClient() as client:
+        keepalive = ListenKeyKeepalive(
+            fetcher=RetryingFetcher(client=client),
+            api_key="test-api-key",
+            listen_key="abc123",
+            base_url="https://api.binance.com",
+        )
+        with patch(
+            "app.exchanges.ws.binance_listen_key.httpx.AsyncClient",
+            _make_client,
+        ):
+            await keepalive._refresh()
+
+    assert (
+        captured["url"]
+        == "https://api.binance.com/api/v3/userDataStream?listenKey=abc123"
+    )
+    assert captured["headers"] == {"X-MBX-APIKEY": "test-api-key"}
