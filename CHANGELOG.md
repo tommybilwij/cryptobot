@@ -1,5 +1,16 @@
 # Changelog
 
+### v1.5.0 (2026-05-24) — Hardening Pass 6: frontend pages wired up
+
+#### Features
+- `/profiles` page wired — lists `GET /api/v1/strategy-profiles`, shows name + version + active badge, click-to-expand renders the profile's `config` JSON inline. Polls every 5s
+- `/live` page wired — polls `GET /api/v1/live/status` every 5s, renders enabled/dry-run/venue badges + last-tick + reconciliation status. Stop button POSTs to `/api/v1/live/stop`. Equity block shows last/peak/drawdown with red highlight when drawdown < -2%
+- `/audit` page wired — polls `GET /api/v1/decision-audit/recent?limit=50` every 5s with `strategy_name` text filter and `decision_type` select (`order` / `snapshot` / all). Per-row: ts, strategy, reconciliation status (green/yellow/red), profile version, decision type, orders/fills count, optional reason
+- `/exchanges` page wired — polls `GET /api/v1/exchanges/health` every 5s, renders one row per venue with configured / mainnet-vs-testnet / reachable badges + quote balance + last error
+- `Sparkline` component (`frontend/src/components/Sparkline.tsx`) — dependency-free inline SVG polyline. Auto-scales y to value range, green stroke when last >= first else red, prints last value top-right. Renders "Not enough data" placeholder when fewer than 2 points
+- Equity sparkline on `/live` pulls the last 100 `decision_type=snapshot` audit rows, extracts `input_state.equity`, reverses to chronological order before rendering
+- No backend changes; 325 tests still pass
+
 ### v1.2.0 (2026-05-24) — Hardening Pass 3: Strategy B real features
 
 #### Features
