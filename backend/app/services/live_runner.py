@@ -28,6 +28,7 @@ from app.risk.exceptions import DrawdownBrakeHalt
 from app.services.alerter import Alerter
 from app.services.decision_audit import DecisionAuditService
 from app.services.live_state_fetcher import LiveStateFetcher
+from app.services.runner_state import RunnerStateService
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ class LiveRunner:
         profile_id: uuid.UUID,
         profile_version: int,
         profile_hash: str,
+        runner_state: RunnerStateService | None = None,
     ) -> None:
         self._exchanges = exchanges
         self._strategy = strategy
@@ -89,12 +91,32 @@ class LiveRunner:
         self._profile_id = profile_id
         self._profile_version = profile_version
         self._profile_hash = profile_hash
+        self._runner_state = runner_state
         self._stopped = False
         self._last_snapshot_ts_ms: int = 0
+        # Peak persisted to runner_state; tracked so we only write when it
+        # strictly ratchets up (one row per new high-water mark).
+        self._persisted_peak: float = self._brake.peak
 
     def stop(self) -> None:
         """Signal the loop to exit after the current tick finishes."""
         self._stopped = True
+
+    async def hydrate(self) -> None:
+        """Restore persisted runner state into in-memory components.
+
+        Currently restores ``peak_equity`` into the drawdown brake. No-op when
+        no ``RunnerStateService`` was wired in or no row exists yet (cold
+        start). Must be called before the first ``run_one_tick()``.
+        """
+        if self._runner_state is None:
+            return
+        stored = await self._runner_state.get("peak_equity")
+        if stored is None:
+            return
+        peak = float(stored["value"])
+        self._brake.set_peak(peak)
+        self._persisted_peak = peak
 
     async def run_one_tick(self) -> dict[str, Any]:
         """Execute one iteration of the live loop.
@@ -144,6 +166,7 @@ class LiveRunner:
         try:
             self._brake.check(equity)
         except DrawdownBrakeHalt as e:
+            await self._maybe_persist_peak()
             logger.warning("drawdown brake triggered: %s", e)
             await self._log_snapshot(state, equity, _STATUS_HALTED_DRAWDOWN_BRAKE, str(e))
             await self._alerter.send(
@@ -152,6 +175,8 @@ class LiveRunner:
                 details={"equity": equity, "peak": self._brake.peak},
             )
             raise
+        # Persist new high-water marks so a restart resumes from the same peak.
+        await self._maybe_persist_peak()
         # Periodic heartbeat snapshot to the audit log.
         snapshot_logged = await self._maybe_log_snapshot(state, equity)
         if snapshot_logged and bool(self._params.get("alerts.send_heartbeats")):
@@ -186,6 +211,23 @@ class LiveRunner:
             if bar is not None:
                 total += pos.qty_base * bar.close
         return total
+
+    async def _maybe_persist_peak(self) -> None:
+        """Write a new high-water mark to runner_state if the brake's peak rose.
+
+        No-op if no ``RunnerStateService`` is wired in, or if the brake's
+        ``peak`` has not strictly increased since the last persisted value.
+        """
+        if self._runner_state is None:
+            return
+        current_peak = self._brake.peak
+        if current_peak <= self._persisted_peak:
+            return
+        await self._runner_state.set(
+            "peak_equity",
+            {"value": current_peak, "ts_ms": int(time.time() * _MS_PER_SECOND)},
+        )
+        self._persisted_peak = current_peak
 
     async def _maybe_log_snapshot(self, state: MarketState, equity: float) -> bool:
         """Log a heartbeat snapshot if the interval has elapsed.

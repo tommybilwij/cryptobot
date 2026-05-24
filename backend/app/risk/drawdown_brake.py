@@ -33,6 +33,15 @@ class DrawdownBrake:
         """Current high-water mark."""
         return self._peak
 
+    def set_peak(self, peak: float) -> None:
+        """Seed the high-water mark from persisted state.
+
+        Used by ``LiveRunner.hydrate()`` on startup to restore the peak from
+        the ``runner_state`` table, so a restart does not silently reset the
+        brake to the profile registry default.
+        """
+        self._peak = float(peak)
+
     def check(self, equity: float) -> None:
         """Update peak if new high; raise ``DrawdownBrakeHalt`` if drop > trigger.
 

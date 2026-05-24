@@ -1,5 +1,14 @@
 # Changelog
 
+### v1.1.0 (2026-05-24) — Hardening Pass 2: state persistence
+
+#### Features
+- `runner_state` table (key/value JSONB) backs restart-safe runner state. New ORM `RunnerState`, migration `0005_create_runner_state`, and `RunnerStateService.get/set` (upsert) in `backend/app/services/runner_state.py`
+- `LiveRunner` accepts optional `RunnerStateService`. `hydrate()` seeds the drawdown brake's high-water mark from the persisted `peak_equity` row; every tick writes back when the brake's peak strictly ratchets up. Restarts no longer reset the brake to the profile registry default
+- `DrawdownBrake.set_peak()` exposes a setter so hydration can seed the peak without bypassing the brake's invariant
+- `ICTracker` and `ComponentGraveyard` accept optional `RunnerStateService` and gain `async persist()` / `async hydrate()`. IC history and buried components survive restarts via the `ic_tracker` and `component_graveyard` keys
+- 10 new tests (3 service round-trip, 2 runner hydrate/persist, 4 risk round-trip — IC tracker + graveyard, plus the bump). 305 tests pass (previously 295)
+
 ### v1.0.0 (2026-05-24) — feature complete
 
 #### Features
