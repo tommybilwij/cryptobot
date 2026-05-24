@@ -77,6 +77,51 @@ async def test_apply_makes_profile_active(async_client: AsyncClient) -> None:
     assert active["id"] == b["id"]
 
 
+async def test_update_config_bumps_version_and_persists(
+    async_client: AsyncClient,
+) -> None:
+    created = (
+        await async_client.post(
+            "/api/v1/strategy-profiles",
+            json={
+                "name": "upd",
+                "config": {
+                    "meta": {"name": "upd", "version": 1},
+                    "strategies": {"funding_arb": {"allocation_pct": 0.30}},
+                },
+            },
+        )
+    ).json()
+    profile_id = created["id"]
+    assert created["version"] == 1
+
+    new_config = {
+        "meta": {"name": "upd", "version": 2},
+        "strategies": {"funding_arb": {"allocation_pct": 0.42}},
+    }
+    r = await async_client.post(
+        f"/api/v1/strategy-profiles/{profile_id}/update-config",
+        json={"config": new_config},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["version"] == 2
+    assert body["config"] == new_config
+
+    refetched = (await async_client.get(f"/api/v1/strategy-profiles/{profile_id}")).json()
+    assert refetched["version"] == 2
+    assert refetched["config"]["strategies"]["funding_arb"]["allocation_pct"] == 0.42
+
+
+async def test_update_config_404_on_missing(async_client: AsyncClient) -> None:
+    missing = "00000000-0000-0000-0000-000000000000"
+    r = await async_client.post(
+        f"/api/v1/strategy-profiles/{missing}/update-config",
+        json={"config": {"meta": {"name": "x", "version": 1}}},
+    )
+    assert r.status_code == 404
+
+
 async def test_clone_creates_new_row_same_config(async_client: AsyncClient) -> None:
     src = (
         await async_client.post(

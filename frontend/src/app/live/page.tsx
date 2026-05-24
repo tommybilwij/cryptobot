@@ -32,7 +32,9 @@ export default function LivePage() {
     try {
       const s = await apiGet<LiveStatus>("/api/v1/live/status");
       setStatus(s);
-      const entries = await apiGet<AuditEntry[]>("/api/v1/decision-audit/recent?decision_type=snapshot&limit=100");
+      const entries = await apiGet<AuditEntry[]>(
+        "/api/v1/decision-audit/recent?decision_type=snapshot&limit=100",
+      );
       const equity = entries
         .map((e) => e.input_state?.equity)
         .filter((v): v is number => typeof v === "number")
@@ -74,7 +76,10 @@ export default function LivePage() {
         </a>
         <div className="flex gap-3 items-center">
           <StatusBadge active={status.enabled} label={status.enabled ? "ENABLED" : "stopped"} />
-          <StatusBadge active={status.dry_run_mode} label={status.dry_run_mode ? "dry-run" : "LIVE"} />
+          <StatusBadge
+            active={status.dry_run_mode}
+            label={status.dry_run_mode ? "dry-run" : "LIVE"}
+          />
           <span className="font-mono text-sm text-zinc-400">{status.venue}</span>
           <button
             onClick={stopRunner}
@@ -99,7 +104,9 @@ export default function LivePage() {
           </div>
           <div>
             <div className="text-zinc-500 text-xs">Drawdown</div>
-            <div className={`font-mono ${status.drawdown_pct && status.drawdown_pct < -0.02 ? "text-red-400" : ""}`}>
+            <div
+              className={`font-mono ${status.drawdown_pct && status.drawdown_pct < -0.02 ? "text-red-400" : ""}`}
+            >
               {status.drawdown_pct != null ? `${(status.drawdown_pct * 100).toFixed(2)}%` : "—"}
             </div>
           </div>

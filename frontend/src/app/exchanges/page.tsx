@@ -46,7 +46,10 @@ export default function ExchangesPage() {
         {health.venues.map((v) => (
           <div key={v.name} className="border border-zinc-800 rounded p-3 flex gap-4 items-center">
             <span className="font-mono w-28">{v.name}</span>
-            <StatusBadge active={v.configured} label={v.configured ? "configured" : "missing keys"} />
+            <StatusBadge
+              active={v.configured}
+              label={v.configured ? "configured" : "missing keys"}
+            />
             <StatusBadge active={!v.use_testnet} label={v.use_testnet ? "testnet" : "MAINNET"} />
             <StatusBadge active={v.reachable} label={v.reachable ? "reachable" : "unreachable"} />
             <span className="font-mono text-sm">

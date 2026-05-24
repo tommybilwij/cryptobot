@@ -32,6 +32,11 @@ services:
         condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   worker:
     build:
@@ -46,6 +51,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
   worker-refresh-data:
     build:
@@ -62,6 +72,11 @@ services:
       postgres:
         condition: service_healthy
     profiles: ["jobs"]   # not started by default; `docker compose --profile jobs run worker-refresh-data`
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
   worker-run-backtest:
     build:
@@ -99,6 +114,11 @@ services:
       postgres:
         condition: service_healthy
     profiles: ["live"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
   strategy-runner-funding-arb:
     build:

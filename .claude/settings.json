@@ -1,7 +1,9 @@
 {
   "env": {
     "FORCE_COLOR": "0",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "FE_DIR": "frontend",
+    "JS_GLOB": "^frontend/.*\\.(js|jsx|ts|tsx)$"
   },
   "permissions": {
     "allow": [

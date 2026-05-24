@@ -59,9 +59,10 @@ export default function OmsPage() {
       <div>
         <h1 className="text-2xl font-bold mb-2">OMS Status</h1>
         <div className="flex gap-4 items-center">
-          <StatusBadge active={status.kill_switch_active} label={
-            status.kill_switch_active ? "KILL SWITCH ACTIVE" : "running"
-          } />
+          <StatusBadge
+            active={status.kill_switch_active}
+            label={status.kill_switch_active ? "KILL SWITCH ACTIVE" : "running"}
+          />
           <button
             onClick={killSwitch}
             disabled={busy || status.kill_switch_active}

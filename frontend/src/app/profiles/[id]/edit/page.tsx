@@ -36,7 +36,7 @@ export default function EditProfilePage() {
     setErr(null);
     try {
       const parsed = JSON.parse(configText);
-      await apiPost(`/api/v1/strategy-profiles/${id}/apply`, parsed);
+      await apiPost(`/api/v1/strategy-profiles/${id}/update-config`, { config: parsed });
       router.push("/profiles");
     } catch (e) {
       setErr((e as Error).message);

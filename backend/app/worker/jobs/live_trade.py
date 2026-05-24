@@ -23,6 +23,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.deps import get_session_factory
 from app.exchanges.base import Exchange
+from app.logging_config import setup_logging
 from app.market_data._http import RetryingFetcher
 from app.models.strategy_profile import StrategyProfile
 from app.oms.kill_switch import KillSwitch
@@ -53,6 +54,7 @@ async def run() -> None:
     Raises:
         KeyError: If there is no active StrategyProfile in the DB.
     """
+    setup_logging()
     factory = get_session_factory()
     async with factory() as session:
         result = await session.execute(
