@@ -1,5 +1,13 @@
 # Changelog
 
+### v1.2.0 (2026-05-24) — Hardening Pass 3: Strategy B real features
+
+#### Features
+- `FeaturePipeline` (`backend/app/services/feature_pipeline.py`) — computes real per-symbol features for the factor portfolio from Parquet history + `MarketState`: `momentum_30d` (log-return over 30d), `realized_vol` (annualised stdev of 1m log returns, ×√525_600), `volume_rank` (summed window volume / universe max), `funding_yield` (current funding × per-venue `funding_intervals_per_year`). Missing-history symbols degrade to zeroed features instead of raising
+- `UniverseLoader` (`backend/app/services/universe_loader.py`) — survivorship-safe universe load from `SymbolManifestSnapshot` by `(snapshot_date, exchange)`. Missing snapshot returns `[]` so callers can choose whether to backfill or fail
+- `FactorPortfolioStrategy` accepts an optional `feature_pipeline=FeaturePipeline(...)`. When injected, `evaluate()` calls it once per tick instead of the legacy stub `_features()`. Backward compatible — existing tests construct the strategy without a pipeline and still pass
+- 8 new tests (4 `test_feature_pipeline`, 3 `test_universe_loader`, 1 `test_factor_portfolio` exercising the injected-pipeline path). 305 prior + 8 = 313 tests pass
+
 ### v1.1.0 (2026-05-24) — Hardening Pass 2: state persistence
 
 #### Features

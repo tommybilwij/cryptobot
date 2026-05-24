@@ -118,3 +118,57 @@ def test_registry_resolves_factor_portfolio() -> None:
     reg = StrategyRegistry.default()
     s = reg.build("factor_portfolio", venue="binance", universe=["BTCUSDT"])
     assert s.name == "factor_portfolio"
+
+
+def test_uses_feature_pipeline_when_provided(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Injected FeaturePipeline replaces stub features; rising closes -> buy."""
+    import polars as pl
+
+    from app.market_data.parquet_store import ParquetStore
+    from app.services.feature_pipeline import FeaturePipeline
+
+    base = 1_704_067_200_000
+    minute_ms = 60_000
+    n = 20
+
+    store = ParquetStore(root=tmp_path)
+    df = pl.DataFrame(
+        {
+            "ts_ms": [base + i * minute_ms for i in range(n)],
+            "open": [60000.0 + i * 100 for i in range(n)],
+            "high": [60000.0 + i * 100 for i in range(n)],
+            "low": [60000.0 + i * 100 for i in range(n)],
+            "close": [60000.0 + i * 100 for i in range(n)],
+            "volume": [10.0] * n,
+        }
+    )
+    store.write_klines("binance", "BTCUSDT", df, year=2024, month=1)
+
+    pipeline = FeaturePipeline(parquet_root=tmp_path, params=_params())
+    s = FactorPortfolioStrategy(
+        venue="binance", universe=["BTCUSDT"], feature_pipeline=pipeline
+    )
+
+    state = MarketState(
+        snapshot=MarketSnapshot(
+            ts_ms=base + n * minute_ms,
+            bars={
+                ("binance", "BTCUSDT", "spot"): Bar(
+                    ts_ms=base + n * minute_ms,
+                    venue="binance",
+                    symbol="BTCUSDT",
+                    product="spot",
+                    open=61900.0,
+                    high=61900.0,
+                    low=61900.0,
+                    close=61900.0,
+                    volume=10.0,
+                )
+            },
+        ),
+        positions=(),
+        cash_quote=10_000.0,
+    )
+    orders = s.evaluate(state, _params())
+    # Rising closes -> positive momentum -> top decile -> buy order for BTCUSDT.
+    assert any(o.symbol == "BTCUSDT" and o.side == "buy" for o in orders)
