@@ -114,9 +114,7 @@ class BinanceExchange:
         url = f"{self._base}{path}?{self._sign(params)}"
         try:
             async with httpx.AsyncClient() as raw:
-                resp = await raw.post(
-                    url, headers=self._headers(), timeout=_DEFAULT_TIMEOUT_S
-                )
+                resp = await raw.post(url, headers=self._headers(), timeout=_DEFAULT_TIMEOUT_S)
         except httpx.RequestError as e:
             raise RuntimeError(f"post {path}: {e}") from e
         if resp.status_code in _AUTH_FAIL_CODES:
@@ -153,9 +151,7 @@ class BinanceExchange:
                     free=float(entry["free"]),
                     locked=float(entry["locked"]),
                 )
-        return Balance(
-            venue=self.name, quote_currency=quote_currency, free=0.0, locked=0.0
-        )
+        return Balance(venue=self.name, quote_currency=quote_currency, free=0.0, locked=0.0)
 
     async def fetch_positions(self) -> tuple[ExchangePosition, ...]:
         """Return open perp positions via ``/fapi/v2/positionRisk``.
@@ -202,14 +198,10 @@ class BinanceExchange:
             order_id=str(body["orderId"]),
             venue=self.name,
             symbol=order.symbol,
-            submitted_ts_ms=int(
-                body.get("transactTime", time.time() * _MS_PER_SECOND)
-            ),
+            submitted_ts_ms=int(body.get("transactTime", time.time() * _MS_PER_SECOND)),
         )
 
-    async def fetch_order(
-        self, order_id: str, symbol: str | None = None
-    ) -> OrderStatus:
+    async def fetch_order(self, order_id: str, symbol: str | None = None) -> OrderStatus:
         """Query an order via ``GET /api/v3/order``.
 
         Binance requires ``symbol`` in the query — without it the only safe
@@ -226,9 +218,7 @@ class BinanceExchange:
                 fee_quote=0.0,
                 raw={},
             )
-        body = await self._signed_get(
-            "/api/v3/order", {"symbol": symbol, "orderId": int(order_id)}
-        )
+        body = await self._signed_get("/api/v3/order", {"symbol": symbol, "orderId": int(order_id)})
         status_map: dict[
             str,
             Literal["pending", "filled", "partially_filled", "cancelled", "rejected"],

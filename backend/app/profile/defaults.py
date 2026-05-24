@@ -15,6 +15,7 @@ Some legacy strategy-level boolean knobs still live in PROFILE_SCOPED_DEFAULTS
 as 0.0 / 1.0 floats (mirroring stockbot). New boolean keys belong in the
 BOOL registry so `params.get(...)` returns a real `bool`.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,7 +41,6 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "strategies.funding_arb.max_notional_usdc": 5_000.0,
     "strategies.funding_arb.max_cash_fraction": 0.5,
     "strategies.funding_arb.intervals_per_year": 1095.75,
-
     # ── Strategy B — factor portfolio ────────────────────────────────────
     "strategies.factor_portfolio.enabled": 1.0,
     "strategies.factor_portfolio.allocation_pct": 0.20,
@@ -53,18 +53,24 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "strategies.factor_portfolio.scoring.thresholds.buy": 7.0,
     "strategies.factor_portfolio.scoring.thresholds.watch": 4.0,
     "strategies.factor_portfolio.scoring.thresholds.llm_gate": 1.0,
-
+    # --- Strategy B: scoring component weights + max scores ---
+    "strategies.factor_portfolio.scoring.momentum_30d.max_score": 5.0,
+    "strategies.factor_portfolio.scoring.momentum_30d.weight": 0.3,
+    "strategies.factor_portfolio.scoring.funding_yield.max_score": 4.0,
+    "strategies.factor_portfolio.scoring.funding_yield.weight": 0.3,
+    "strategies.factor_portfolio.scoring.realized_vol.max_score": 3.0,
+    "strategies.factor_portfolio.scoring.realized_vol.weight": 0.2,
+    "strategies.factor_portfolio.scoring.volume_rank.max_score": 3.0,
+    "strategies.factor_portfolio.scoring.volume_rank.weight": 0.2,
     # ── Meta-allocator ──────────────────────────────────────────────────
     "strategies.meta_allocator.enabled": 1.0,
     "strategies.meta_allocator.lookback_days": 30,
     "strategies.meta_allocator.min_weight_pct": 0.10,
     "strategies.meta_allocator.max_weight_pct": 0.70,
-
     # ── Universe ─────────────────────────────────────────────────────────
     "universe.alt_universe_size": 100,
     "universe.min_daily_volume_usd": 5_000_000,
     "universe.min_listing_age_days": 30,
-
     # ── Risk (global, applied across all strategies) ─────────────────────
     "risk.max_gross_leverage": 1.50,
     "risk.max_net_leverage": 0.50,
@@ -89,14 +95,12 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "risk.black_swan_circuit.enabled": 1.0,
     "risk.black_swan_circuit.move_pct": 0.08,
     "risk.black_swan_circuit.window_minutes": 5,
-
     # ── Execution (global) ───────────────────────────────────────────────
     "execution.max_slippage_bps": 20,
     "execution.taker_fallback_after_s": 60,
     "execution.min_notional_usd": 10,
     "execution.max_retry_attempts": 3,
     "execution.retry_backoff_ms": 500,
-
     # ── Execution (fees + slippage; used by backtest fill sim + live OMS)
     "execution.slippage_bps.binance": 5.0,
     "execution.slippage_bps.bybit": 5.0,
@@ -105,19 +109,16 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "execution.fee_bps.binance.perp": 4.0,
     "execution.fee_bps.bybit.perp": 5.5,
     "execution.fee_bps.hyperliquid.perp": 3.5,
-
     # ── OMS thresholds + cadence ─────────────────────────────────────────
     "oms.hedge_drift_halt_pct": 0.05,
     "oms.reconcile_drift_halt_pct": 0.02,
     "oms.fill_poll_interval_s": 1.0,
     "oms.max_fill_wait_s": 30.0,
     "oms.audit_snapshot_interval_s": 3600,
-
     # ── Exchange timeouts ────────────────────────────────────────────────
     "exchanges.binance.timeout_s": 10.0,
     "exchanges.bybit.timeout_s": 10.0,
     "exchanges.hyperliquid.timeout_s": 10.0,
-
     # ── Backtest assumptions ────────────────────────────────────────────
     "backtest.starting_capital_usd": 10000,
     "backtest.warmup_days": 60,
@@ -125,21 +126,17 @@ PROFILE_SCOPED_DEFAULTS: dict[str, float] = {
     "backtest.survivorship_bias_safe": 1.0,
     "backtest.use_predicted_funding_in_bt": 1.0,
     "backtest.constant_slippage_bps": 3,
-
     # ── Backtest harness ─────────────────────────────────────────────────
     "backtest.initial_cash_quote_usdc": 10_000.0,
     "backtest.bar_interval_s": 60,
     "backtest.funding_arb_skeleton.hedge_size_fraction": 0.5,
     "metrics.minutes_per_year": 525_600,
-
     # ── Live runner (Phase 8) ───────────────────────────────────────────
     "live.tick_interval_s": 60.0,
     "live.snapshot_interval_s": 3600.0,
     "live.cold_start_grace_s": 300.0,
-
     # ── Alerts (Phase 9) ────────────────────────────────────────────────
     "alerts.timeout_s": 5.0,
-
     # ── Data health ─────────────────────────────────────────────────────
     "data_health.max_age_s.trades": 60,
     "data_health.max_age_s.klines": 120,

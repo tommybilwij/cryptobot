@@ -34,13 +34,9 @@ class DataHealthEventResponse(BaseModel):
 
 
 @router.get("/recent", response_model=list[DataHealthEventResponse])
-async def recent(
-    db: DbSession, limit: int = _DEFAULT_LIMIT
-) -> list[DataHealthEventResponse]:
+async def recent(db: DbSession, limit: int = _DEFAULT_LIMIT) -> list[DataHealthEventResponse]:
     result = await db.execute(
         select(DataHealthEvent).order_by(DataHealthEvent.ts.desc()).limit(limit)
     )
     rows = list(result.scalars().all())
-    return [
-        DataHealthEventResponse.model_validate(r, from_attributes=True) for r in rows
-    ]
+    return [DataHealthEventResponse.model_validate(r, from_attributes=True) for r in rows]

@@ -20,9 +20,7 @@ class UnknownStrategy(KeyError):
 
 
 class StrategyRegistry:
-    def __init__(
-        self, factories: dict[str, Callable[..., Strategy]]
-    ) -> None:
+    def __init__(self, factories: dict[str, Callable[..., Strategy]]) -> None:
         self._factories = factories
 
     @classmethod

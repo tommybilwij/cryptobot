@@ -4,6 +4,7 @@ Constraint #1 cashes out here: strategy code calls `params.get(path)` and
 nothing else. If a path isn't in the registry, boot fails — no silent
 fallbacks to literals.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -48,8 +49,7 @@ class ProfileParams:
         if path in PROFILE_SCOPED_BOOL_DEFAULTS:
             return PROFILE_SCOPED_BOOL_DEFAULTS[path]
         raise UnknownParamPath(
-            f"path {path!r} is not in PROFILE_SCOPED_DEFAULTS, _STRING_, "
-            f"_DICT_, or _BOOL_"
+            f"path {path!r} is not in PROFILE_SCOPED_DEFAULTS, _STRING_, _DICT_, or _BOOL_"
         )
 
     def keys(self) -> set[str]:

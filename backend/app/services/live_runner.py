@@ -145,9 +145,7 @@ class LiveRunner:
             self._brake.check(equity)
         except DrawdownBrakeHalt as e:
             logger.warning("drawdown brake triggered: %s", e)
-            await self._log_snapshot(
-                state, equity, _STATUS_HALTED_DRAWDOWN_BRAKE, str(e)
-            )
+            await self._log_snapshot(state, equity, _STATUS_HALTED_DRAWDOWN_BRAKE, str(e))
             await self._alerter.send(
                 severity=_SEVERITY_CRITICAL,
                 event=_EVENT_DRAWDOWN_BRAKE,
@@ -189,18 +187,14 @@ class LiveRunner:
                 total += pos.qty_base * bar.close
         return total
 
-    async def _maybe_log_snapshot(
-        self, state: MarketState, equity: float
-    ) -> bool:
+    async def _maybe_log_snapshot(self, state: MarketState, equity: float) -> bool:
         """Log a heartbeat snapshot if the interval has elapsed.
 
         Returns:
             True if a snapshot was written this tick, False otherwise.
             Callers use this to decide whether to fire a heartbeat alert.
         """
-        interval_ms = int(
-            float(self._params.get("live.snapshot_interval_s")) * _MS_PER_SECOND
-        )
+        interval_ms = int(float(self._params.get("live.snapshot_interval_s")) * _MS_PER_SECOND)
         now_ms = int(time.time() * _MS_PER_SECOND)
         if now_ms - self._last_snapshot_ts_ms < interval_ms:
             return False

@@ -4,6 +4,7 @@ Schemas mirror the registry structure but enforce ranges. Schema validation is
 the *boundary check* — internal code reads via ProfileParams which trusts the
 profile is already validated.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field

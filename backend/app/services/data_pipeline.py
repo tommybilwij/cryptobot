@@ -20,9 +20,7 @@ class DataPipelineService:
         self._store = store
         self._sources = sources
 
-    async def refresh_klines_1m(
-        self, exchange: str, symbol: str, *, year: int, month: int
-    ) -> None:
+    async def refresh_klines_1m(self, exchange: str, symbol: str, *, year: int, month: int) -> None:
         source = self._sources.get(exchange)
         if source is None:
             raise UnknownSource(exchange)

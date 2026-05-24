@@ -85,9 +85,7 @@ class BinanceVisionClient:
             pl.col("volume"),
         )
 
-    async def fetch_funding_rates(
-        self, symbol: str, year: int, month: int
-    ) -> pl.DataFrame:
+    async def fetch_funding_rates(self, symbol: str, year: int, month: int) -> pl.DataFrame:
         url = self._funding_url(symbol, year, month)
         raw = await self._fetcher.get_bytes(url)
         csv_bytes = _unzip_single(raw)
@@ -106,9 +104,7 @@ class BinanceVisionClient:
             pl.col("last_funding_rate").alias("realized"),
         )
 
-    async def fetch_open_interest(
-        self, symbol: str, year: int, month: int
-    ) -> pl.DataFrame:
+    async def fetch_open_interest(self, symbol: str, year: int, month: int) -> pl.DataFrame:
         url = self._oi_url(symbol, year, month)
         raw = await self._fetcher.get_bytes(url)
         csv_bytes = _unzip_single(raw)

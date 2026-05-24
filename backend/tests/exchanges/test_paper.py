@@ -26,8 +26,12 @@ async def test_paper_place_buy_fills_at_mark_with_slippage() -> None:
     ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
     ex.set_mark_price("BTCUSDT", "spot", 60000.0)
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     receipt = await ex.place_order(order)
     assert receipt.order_id
@@ -45,8 +49,12 @@ async def test_paper_fill_debits_balance() -> None:
     ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
     ex.set_mark_price("BTCUSDT", "spot", 60000.0)
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     await ex.place_order(order)
     b = await ex.fetch_balance("USDC")
@@ -59,8 +67,12 @@ async def test_paper_fetch_positions_after_buy() -> None:
     ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
     ex.set_mark_price("BTCUSDT", "spot", 60000.0)
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     await ex.place_order(order)
     positions = await ex.fetch_positions()
@@ -74,8 +86,12 @@ async def test_paper_cancel_pending_is_noop_for_market_fills() -> None:
     ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
     ex.set_mark_price("BTCUSDT", "spot", 60000.0)
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     receipt = await ex.place_order(order)
     # Already filled — cancel is no-op

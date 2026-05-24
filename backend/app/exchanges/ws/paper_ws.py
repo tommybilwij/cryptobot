@@ -29,9 +29,7 @@ class PaperWSClient:
             msg = await self._queue.get()
             yield msg
 
-    async def next_fill_for(
-        self, order_id: str, *, timeout_s: float
-    ) -> dict[str, Any] | None:
+    async def next_fill_for(self, order_id: str, *, timeout_s: float) -> dict[str, Any] | None:
         try:
             while True:
                 msg = await asyncio.wait_for(self._queue.get(), timeout=timeout_s)

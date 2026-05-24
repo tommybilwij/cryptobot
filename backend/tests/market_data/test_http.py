@@ -76,6 +76,7 @@ async def test_fetcher_post_json_sends_body_and_returns_response() -> None:
     def handler(req: Request) -> Response:
         assert req.method == "POST"
         import json
+
         captured["body"] = json.loads(req.content)
         return Response(200, json={"ok": True})
 

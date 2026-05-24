@@ -39,17 +39,13 @@ class FundingArbStrategy:
             all_orders.extend(self._evaluate_one(state, params, symbol))
         return all_orders
 
-    def _evaluate_one(
-        self, state: MarketState, params: ProfileParams, symbol: str
-    ) -> list[Order]:
+    def _evaluate_one(self, state: MarketState, params: ProfileParams, symbol: str) -> list[Order]:
         funding = state.snapshot.funding_rates.get((self._venue, symbol))
         if funding is None:
             return []
         funding_bps_per_8h = funding * _BPS_DIVISOR
         spot_pos, perp_pos = self._find_position(state.positions, symbol)
-        return self._decide(
-            funding_bps_per_8h, spot_pos, perp_pos, state, params, symbol
-        )
+        return self._decide(funding_bps_per_8h, spot_pos, perp_pos, state, params, symbol)
 
     def _decide(
         self,
@@ -69,9 +65,7 @@ class FundingArbStrategy:
 
         # Hedged → maybe exit
         if spot_pos is not None and perp_pos is not None:
-            exit_threshold = float(
-                params.get("strategies.funding_arb.exit_bps_per_8h")
-            )
+            exit_threshold = float(params.get("strategies.funding_arb.exit_bps_per_8h"))
             if funding_bps_per_8h > exit_threshold:
                 return []
             return self._close_hedge(spot_pos, perp_pos, symbol)
@@ -91,9 +85,7 @@ class FundingArbStrategy:
 
         # Orphan perp → close perp
         assert perp_pos is not None
-        side: Literal["buy", "sell"] = (
-            "buy" if perp_pos.qty_base < 0.0 else "sell"
-        )
+        side: Literal["buy", "sell"] = "buy" if perp_pos.qty_base < 0.0 else "sell"
         return [
             Order(
                 venue=self._venue,
@@ -119,9 +111,7 @@ class FundingArbStrategy:
                 perp = p
         return spot, perp
 
-    def _open_hedge(
-        self, state: MarketState, params: ProfileParams, symbol: str
-    ) -> list[Order]:
+    def _open_hedge(self, state: MarketState, params: ProfileParams, symbol: str) -> list[Order]:
         spot_bar = state.snapshot.bars.get((self._venue, symbol, "spot"))
         perp_bar = state.snapshot.bars.get((self._venue, symbol, "perp"))
         if spot_bar is None or perp_bar is None:
@@ -142,9 +132,7 @@ class FundingArbStrategy:
             # is a deliberate simplification for the opt-in path — the live
             # runner has the MTM, but the engine doesn't yet expose it here.
             sizer = SizingService(params=params)
-            funding_rate = state.snapshot.funding_rates.get(
-                (self._venue, symbol), 0.0
-            )
+            funding_rate = state.snapshot.funding_rates.get((self._venue, symbol), 0.0)
             peak_equity = float(params.get("risk.drawdown_brake.peak_equity"))
             target = sizer.compute_notional(
                 funding_rate_per_interval=funding_rate,
@@ -178,9 +166,7 @@ class FundingArbStrategy:
             ),
         ]
 
-    def _close_hedge(
-        self, spot_pos: Position, perp_pos: Position, symbol: str
-    ) -> list[Order]:
+    def _close_hedge(self, spot_pos: Position, perp_pos: Position, symbol: str) -> list[Order]:
         return [
             Order(
                 venue=self._venue,

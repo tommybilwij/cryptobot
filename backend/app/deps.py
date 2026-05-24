@@ -1,4 +1,5 @@
 """Dependency injection: async DB session + engine lifecycle."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

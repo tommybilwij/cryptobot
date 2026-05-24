@@ -33,9 +33,7 @@ class FillSimulator:
             fill_px = self._compute_fill_px(order, bar)
             if fill_px is None:
                 continue
-            fee_bps = float(
-                self._params.get(f"execution.fee_bps.{order.venue}.{order.product}")
-            )
+            fee_bps = float(self._params.get(f"execution.fee_bps.{order.venue}.{order.product}"))
             notional = abs(order.qty_base) * fill_px
             fee = notional * (fee_bps / _BPS_DIVISOR)
             if order.side == "buy":
@@ -47,15 +45,11 @@ class FillSimulator:
                 cash_left -= cost
             else:
                 cash_left += notional - fee
-            fills.append(
-                Fill(ts_ms=snapshot.ts_ms, order=order, fill_px=fill_px, fee_quote=fee)
-            )
+            fills.append(Fill(ts_ms=snapshot.ts_ms, order=order, fill_px=fill_px, fee_quote=fee))
         return fills, cash_left
 
     def _compute_fill_px(self, order: Order, bar: Bar) -> float | None:
-        slippage_bps = float(
-            self._params.get(f"execution.slippage_bps.{order.venue}")
-        )
+        slippage_bps = float(self._params.get(f"execution.slippage_bps.{order.venue}"))
         slip = slippage_bps / _BPS_DIVISOR
         if order.order_type == "market":
             if order.side == "buy":

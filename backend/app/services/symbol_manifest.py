@@ -30,9 +30,7 @@ class SymbolManifestService:
         await self._session.flush()
         return row
 
-    async def get(
-        self, snapshot_date: date, *, exchange: str
-    ) -> SymbolManifestSnapshot | None:
+    async def get(self, snapshot_date: date, *, exchange: str) -> SymbolManifestSnapshot | None:
         result = await self._session.execute(
             select(SymbolManifestSnapshot)
             .where(SymbolManifestSnapshot.snapshot_date == snapshot_date)

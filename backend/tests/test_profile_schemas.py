@@ -1,4 +1,5 @@
 """Tests for Pydantic schemas validating profile JSONB."""
+
 from __future__ import annotations
 
 import json

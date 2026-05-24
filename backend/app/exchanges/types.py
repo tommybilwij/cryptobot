@@ -35,9 +35,7 @@ class OrderReceipt:
     submitted_ts_ms: int
 
 
-_OrderStatusLiteral = Literal[
-    "pending", "filled", "partially_filled", "cancelled", "rejected"
-]
+_OrderStatusLiteral = Literal["pending", "filled", "partially_filled", "cancelled", "rejected"]
 
 
 @dataclass(frozen=True)

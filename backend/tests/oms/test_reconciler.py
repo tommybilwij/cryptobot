@@ -17,16 +17,23 @@ def _params() -> ProfileParams:
 
 def _book_pos(qty: float, product: str = "spot", symbol: str = "BTCUSDT") -> Position:
     return Position(
-        venue="binance", symbol=symbol, product=product,  # type: ignore[arg-type]
-        qty_base=qty, avg_entry_px=60000.0,
+        venue="binance",
+        symbol=symbol,
+        product=product,  # type: ignore[arg-type]
+        qty_base=qty,
+        avg_entry_px=60000.0,
     )
 
 
 def _exchange_pos(qty: float, product: str = "spot", symbol: str = "BTCUSDT") -> ExchangePosition:
     return ExchangePosition(
-        venue="binance", symbol=symbol, product=product,  # type: ignore[arg-type]
-        qty_base=qty, avg_entry_px=60000.0,
-        mark_px=60000.0, unrealized_pnl_quote=0.0,
+        venue="binance",
+        symbol=symbol,
+        product=product,  # type: ignore[arg-type]
+        qty_base=qty,
+        avg_entry_px=60000.0,
+        mark_px=60000.0,
+        unrealized_pnl_quote=0.0,
     )
 
 

@@ -24,9 +24,7 @@ from app.services.backtest_service import BacktestService
 
 
 def _canonical_hash(d: dict) -> str:
-    return hashlib.sha256(
-        json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 @pytest.mark.slow
@@ -36,19 +34,12 @@ async def test_smoke_buy_and_hold_btcusdt_jan_2024(
 ) -> None:
     parquet_root = Path("data/parquet")
     expected = (
-        parquet_root
-        / "binance"
-        / "BTCUSDT"
-        / DataType.KLINE_1M.value
-        / "2024"
-        / "01.parquet"
+        parquet_root / "binance" / "BTCUSDT" / DataType.KLINE_1M.value / "2024" / "01.parquet"
     )
     if not expected.exists():
         pytest.skip(f"requires Phase 3 data at {expected}")
 
-    profile = StrategyProfile(
-        name="smoke-buyhold", version=1, is_active=False, config={}
-    )
+    profile = StrategyProfile(name="smoke-buyhold", version=1, is_active=False, config={})
     db_session.add(profile)
     await db_session.flush()
     await db_session.commit()

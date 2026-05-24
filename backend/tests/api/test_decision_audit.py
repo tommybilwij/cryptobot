@@ -13,9 +13,7 @@ from app.models.strategy_profile import StrategyProfile
 
 
 @pytest.mark.asyncio
-async def test_recent_returns_entries(
-    async_client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_recent_returns_entries(async_client: AsyncClient, db_session: AsyncSession) -> None:
     p = StrategyProfile(name="da-test", version=1, is_active=False, config={})
     db_session.add(p)
     await db_session.flush()

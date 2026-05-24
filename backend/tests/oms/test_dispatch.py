@@ -45,8 +45,12 @@ async def test_dispatch_single_order_returns_fills(db_session: AsyncSession) -> 
     )
 
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     result = await oms.dispatch(
         orders=[order],
@@ -85,8 +89,12 @@ async def test_dispatch_kill_switch_active_raises(db_session: AsyncSession) -> N
     )
 
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     with pytest.raises(KillSwitchActive):
         await oms.dispatch(
@@ -118,8 +126,12 @@ async def test_dispatch_unconfigured_venue_raises(db_session: AsyncSession) -> N
     )
 
     order = Order(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        side="buy", qty_base=0.1, order_type="market",
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.1,
+        order_type="market",
     )
     with pytest.raises(UnconfiguredVenueError):
         await oms.dispatch(
@@ -149,10 +161,20 @@ async def test_dispatch_hedge_drift_raises(db_session: AsyncSession) -> None:
     drifted_state = MarketState(
         snapshot=MarketSnapshot(ts_ms=1714521600000, bars={}),
         positions=(
-            Position(venue="binance", symbol="BTCUSDT", product="spot",
-                     qty_base=0.1, avg_entry_px=60000.0),
-            Position(venue="binance", symbol="BTCUSDT", product="perp",
-                     qty_base=-0.11, avg_entry_px=60000.0),
+            Position(
+                venue="binance",
+                symbol="BTCUSDT",
+                product="spot",
+                qty_base=0.1,
+                avg_entry_px=60000.0,
+            ),
+            Position(
+                venue="binance",
+                symbol="BTCUSDT",
+                product="perp",
+                qty_base=-0.11,
+                avg_entry_px=60000.0,
+            ),
         ),
         cash_quote=10_000.0,
     )

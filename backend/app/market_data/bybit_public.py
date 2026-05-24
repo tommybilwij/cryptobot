@@ -28,8 +28,7 @@ class BybitPublicClient:
 
     def _kline_url(self, symbol: str, year: int, month: int) -> str:
         return (
-            f"{BASE_URL}/spot_index_price_kline/{symbol}/1m/"
-            f"{symbol}-{year:04d}-{month:02d}.csv.gz"
+            f"{BASE_URL}/spot_index_price_kline/{symbol}/1m/{symbol}-{year:04d}-{month:02d}.csv.gz"
         )
 
     async def fetch_klines_1m(self, symbol: str, year: int, month: int) -> pl.DataFrame:

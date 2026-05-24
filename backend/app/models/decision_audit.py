@@ -20,9 +20,7 @@ class DecisionAuditEntry(Base):
         Index("ix_decision_audit_profile_hash_ts", "profile_hash", "ts"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     strategy_name: Mapped[str] = mapped_column(String(80), nullable=False)
     profile_id: Mapped[uuid.UUID] = mapped_column(

@@ -110,9 +110,7 @@ class BybitExchange:
         query = "accountType=UNIFIED"
         url = f"{self._base}/v5/account/wallet-balance?{query}"
         headers = self._headers(ts_ms, query)
-        body = cast(
-            "dict[str, Any]", await self._fetcher.get_json(url, headers=headers)
-        )
+        body = cast("dict[str, Any]", await self._fetcher.get_json(url, headers=headers))
         self._check_response(body)
         wallet_list = body["result"]["list"]
         if not wallet_list:
@@ -149,9 +147,7 @@ class BybitExchange:
         query = "category=linear&settleCoin=USDT"
         url = f"{self._base}/v5/position/list?{query}"
         headers = self._headers(ts_ms, query)
-        body = cast(
-            "dict[str, Any]", await self._fetcher.get_json(url, headers=headers)
-        )
+        body = cast("dict[str, Any]", await self._fetcher.get_json(url, headers=headers))
         self._check_response(body)
         positions: list[ExchangePosition] = []
         for entry in body.get("result", {}).get("list", []):
@@ -209,9 +205,7 @@ class BybitExchange:
         if resp.status_code == _HTTP_UNAUTHORIZED:
             raise AuthFailed(f"bybit place_order: {resp.text}")
         if resp.status_code >= _HTTP_BAD_REQUEST:
-            raise Rejected(
-                f"bybit place_order: {resp.status_code} {resp.text}"
-            )
+            raise Rejected(f"bybit place_order: {resp.status_code} {resp.text}")
         data = resp.json()
         self._check_response(data)
         return OrderReceipt(
@@ -221,9 +215,7 @@ class BybitExchange:
             submitted_ts_ms=int(ts_ms),
         )
 
-    async def fetch_order(
-        self, order_id: str, symbol: str | None = None
-    ) -> OrderStatus:
+    async def fetch_order(self, order_id: str, symbol: str | None = None) -> OrderStatus:
         """Query an order via ``GET /v5/order/realtime`` in the linear category.
 
         ``symbol`` is accepted for Protocol parity but not required by
@@ -235,9 +227,7 @@ class BybitExchange:
         query = f"category=linear&orderId={order_id}"
         url = f"{self._base}/v5/order/realtime?{query}"
         headers = self._headers(ts_ms, query)
-        body = cast(
-            "dict[str, Any]", await self._fetcher.get_json(url, headers=headers)
-        )
+        body = cast("dict[str, Any]", await self._fetcher.get_json(url, headers=headers))
         self._check_response(body)
         rows = body.get("result", {}).get("list", [])
         if not rows:
@@ -278,10 +268,7 @@ class BybitExchange:
 
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         category = "linear" if product == "perp" else "spot"
-        url = (
-            f"{self._base}/v5/market/tickers"
-            f"?category={category}&symbol={symbol}"
-        )
+        url = f"{self._base}/v5/market/tickers?category={category}&symbol={symbol}"
         body = cast("dict[str, Any]", await self._fetcher.get_json(url))
         self._check_response(body)
         return float(body["result"]["list"][0]["lastPrice"])
@@ -293,10 +280,7 @@ class BybitExchange:
         unreachable or the symbol is unknown — callers treat missing funding
         as a soft signal absence, not a hard failure.
         """
-        url = (
-            f"{self._base}/v5/market/funding/history"
-            f"?category=linear&symbol={symbol}&limit=1"
-        )
+        url = f"{self._base}/v5/market/funding/history?category=linear&symbol={symbol}&limit=1"
         try:
             body = cast("dict[str, Any]", await self._fetcher.get_json(url))
         except RuntimeError:

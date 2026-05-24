@@ -30,9 +30,7 @@ class MarketDataSource(Protocol):
         """Return a Polars frame with columns ts_ms / open / high / low / close / volume."""
         ...
 
-    async def fetch_funding_rates(
-        self, symbol: str, year: int, month: int
-    ) -> pl.DataFrame:
+    async def fetch_funding_rates(self, symbol: str, year: int, month: int) -> pl.DataFrame:
         """Return a Polars frame with columns ts_ms / predicted / realized.
 
         Raises NotImplementedError on venues that don't expose funding rates
@@ -40,9 +38,7 @@ class MarketDataSource(Protocol):
         """
         ...
 
-    async def fetch_open_interest(
-        self, symbol: str, year: int, month: int
-    ) -> pl.DataFrame:
+    async def fetch_open_interest(self, symbol: str, year: int, month: int) -> pl.DataFrame:
         """Return a Polars frame with columns ts_ms / oi_base / oi_quote.
 
         Raises NotImplementedError where unsupported.

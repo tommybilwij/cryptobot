@@ -47,8 +47,11 @@ def test_buy_and_hold_equity_curve_rises_with_price(tmp_path: Path) -> None:
     start = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
     end = datetime(2024, 1, 1, 0, 2, tzinfo=UTC)
     result = engine.run(
-        venue="binance", symbols=["BTCUSDT"], products=["spot"],
-        start=start, end=end,
+        venue="binance",
+        symbols=["BTCUSDT"],
+        products=["spot"],
+        start=start,
+        end=end,
     )
 
     assert result.equity_curve.height == 3
@@ -65,8 +68,11 @@ def test_engine_raises_on_missing_data(tmp_path: Path) -> None:
     end = datetime(2024, 1, 31, tzinfo=UTC)
     with pytest.raises(BacktestDataError):
         engine.run(
-            venue="binance", symbols=["BTCUSDT"], products=["spot"],
-            start=start, end=end,
+            venue="binance",
+            symbols=["BTCUSDT"],
+            products=["spot"],
+            start=start,
+            end=end,
         )
 
 
@@ -86,8 +92,11 @@ def test_zero_orders_per_tick_produces_flat_curve(tmp_path: Path) -> None:
     start = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
     end = datetime(2024, 1, 1, 0, 2, tzinfo=UTC)
     result = engine.run(
-        venue="binance", symbols=["BTCUSDT"], products=["spot"],
-        start=start, end=end,
+        venue="binance",
+        symbols=["BTCUSDT"],
+        products=["spot"],
+        start=start,
+        end=end,
     )
 
     initial = float(params.get("backtest.initial_cash_quote_usdc"))

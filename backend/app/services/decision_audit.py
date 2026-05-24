@@ -83,11 +83,7 @@ class DecisionAuditService:
         strategy_name: str | None = None,
         decision_type: str | None = None,
     ) -> list[DecisionAuditEntry]:
-        stmt = (
-            select(DecisionAuditEntry)
-            .order_by(DecisionAuditEntry.ts.desc())
-            .limit(limit)
-        )
+        stmt = select(DecisionAuditEntry).order_by(DecisionAuditEntry.ts.desc()).limit(limit)
         if strategy_name is not None:
             stmt = stmt.where(DecisionAuditEntry.strategy_name == strategy_name)
         if decision_type is not None:

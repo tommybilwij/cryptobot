@@ -119,9 +119,7 @@ class OMS:
                 reconciliation_status=_STATUS_KILL_SWITCH,
                 reason="kill switch active",
             )
-            raise KillSwitchActive(
-                f"kill switch active; audit_entry_id={entry.id}"
-            )
+            raise KillSwitchActive(f"kill switch active; audit_entry_id={entry.id}")
 
         # 2. Validate each order's venue is configured.
         for order in orders:
@@ -139,8 +137,7 @@ class OMS:
                     reason=f"venue {order.venue} not configured",
                 )
                 raise UnconfiguredVenueError(
-                    f"{order.venue} not in configured exchanges; "
-                    f"audit_entry_id={entry.id}"
+                    f"{order.venue} not in configured exchanges; audit_entry_id={entry.id}"
                 )
 
         # 3. Place orders sequentially and poll for terminal status.
@@ -172,9 +169,7 @@ class OMS:
                 reconciliation_status=_STATUS_AUTH_FAILED,
                 reason=str(e),
             )
-            raise OMSError(
-                f"auth failed during dispatch; audit_entry_id={entry.id}"
-            ) from e
+            raise OMSError(f"auth failed during dispatch; audit_entry_id={entry.id}") from e
 
         # 4. Reconcile. Runs unconditionally — empty-orders dispatch still
         #    needs hedge-consistency to fire on pre-existing book drift.
@@ -187,9 +182,7 @@ class OMS:
             if touched_venues:
                 ex_positions: list[ExchangePosition] = []
                 for venue in touched_venues:
-                    ex_positions.extend(
-                        await self._exchanges[venue].fetch_positions()
-                    )
+                    ex_positions.extend(await self._exchanges[venue].fetch_positions())
                 self._reconciler.check_book_vs_exchange(
                     book_positions=state.positions,
                     exchange_positions=tuple(ex_positions),
@@ -230,9 +223,7 @@ class OMS:
             reason=reason,
         )
 
-    async def _poll_until_terminal(
-        self, ex: Exchange, order_id: str
-    ) -> OrderStatus:
+    async def _poll_until_terminal(self, ex: Exchange, order_id: str) -> OrderStatus:
         """Poll ``fetch_order`` until terminal status or timeout.
 
         On timeout, best-effort ``cancel_order`` and return the last status.

@@ -257,9 +257,7 @@ async def test_bybit_fetch_order_parses_realtime() -> None:
 async def test_auth_failure_raises() -> None:
     # Bybit signals auth failure with HTTP 200 + retCode 10003.
     def handler(req: Request) -> Response:
-        return Response(
-            200, json={"retCode": 10003, "retMsg": "Invalid API key"}
-        )
+        return Response(200, json={"retCode": 10003, "retMsg": "Invalid API key"})
 
     async with AsyncClient(transport=MockTransport(handler)) as http:
         fetcher = RetryingFetcher(client=http, max_retries=0, base_backoff_s=0.0)

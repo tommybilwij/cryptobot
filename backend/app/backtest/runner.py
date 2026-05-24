@@ -50,6 +50,4 @@ def run_backtest(
     metrics = compute_metrics(
         engine_result.equity_curve, params=params, num_trades=engine_result.num_trades
     )
-    return BacktestRunResult(
-        equity_curve=engine_result.equity_curve, metrics=metrics
-    )
+    return BacktestRunResult(equity_curve=engine_result.equity_curve, metrics=metrics)

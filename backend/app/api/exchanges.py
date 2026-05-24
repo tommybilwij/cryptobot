@@ -25,9 +25,7 @@ _VENUES: tuple[str, ...] = ("binance", "bybit", "hyperliquid")
 
 
 async def _active_profile(db: AsyncSession) -> StrategyProfile | None:
-    result = await db.execute(
-        select(StrategyProfile).where(StrategyProfile.is_active.is_(True))
-    )
+    result = await db.execute(select(StrategyProfile).where(StrategyProfile.is_active.is_(True)))
     return result.scalar_one_or_none()
 
 

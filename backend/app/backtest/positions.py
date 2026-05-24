@@ -37,8 +37,7 @@ class PositionBook:
             if same_sign:
                 # adding to position → weighted average entry
                 new_avg = (
-                    (existing.avg_entry_px * abs(existing.qty_base))
-                    + (fill.fill_px * abs(delta))
+                    (existing.avg_entry_px * abs(existing.qty_base)) + (fill.fill_px * abs(delta))
                 ) / (abs(existing.qty_base) + abs(delta))
                 self._positions[key] = Position(
                     venue=existing.venue,

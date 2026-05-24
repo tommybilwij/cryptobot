@@ -13,12 +13,26 @@ def _params() -> ProfileParams:
 
 def _state(positions: tuple[Position, ...] = (), cash: float = 10_000.0) -> MarketState:
     spot_bar = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="spot",
-        open=60000.0, high=60050.0, low=59950.0, close=60010.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        open=60000.0,
+        high=60050.0,
+        low=59950.0,
+        close=60010.0,
+        volume=10.0,
     )
     perp_bar = Bar(
-        ts_ms=1, venue="binance", symbol="BTCUSDT", product="perp",
-        open=60000.0, high=60050.0, low=59950.0, close=60010.0, volume=10.0,
+        ts_ms=1,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        open=60000.0,
+        high=60050.0,
+        low=59950.0,
+        close=60010.0,
+        volume=10.0,
     )
     return MarketState(
         snapshot=MarketSnapshot(
@@ -49,7 +63,11 @@ def test_emits_hedge_pair_when_no_position() -> None:
 
 def test_emits_nothing_when_already_hedged() -> None:
     s = FundingArbSkeleton(venue="binance", symbol="BTCUSDT")
-    long_spot = Position(venue="binance", symbol="BTCUSDT", product="spot", qty_base=0.08, avg_entry_px=60000.0)
-    short_perp = Position(venue="binance", symbol="BTCUSDT", product="perp", qty_base=-0.08, avg_entry_px=60000.0)
+    long_spot = Position(
+        venue="binance", symbol="BTCUSDT", product="spot", qty_base=0.08, avg_entry_px=60000.0
+    )
+    short_perp = Position(
+        venue="binance", symbol="BTCUSDT", product="perp", qty_base=-0.08, avg_entry_px=60000.0
+    )
     orders = s.evaluate(_state(positions=(long_spot, short_perp)), _params())
     assert orders == []

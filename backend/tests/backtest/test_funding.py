@@ -21,8 +21,11 @@ def _funding_df(events: list[tuple[int, float]]) -> pl.DataFrame:
 def test_no_perp_position_no_op() -> None:
     ledger = FundingLedger()
     pos_long_spot = Position(
-        venue="binance", symbol="BTCUSDT", product="spot",
-        qty_base=0.5, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        qty_base=0.5,
+        avg_entry_px=60000.0,
     )
     events = ledger.events_for(
         positions=(pos_long_spot,),
@@ -36,8 +39,11 @@ def test_no_perp_position_no_op() -> None:
 def test_short_perp_collects_positive_funding() -> None:
     ledger = FundingLedger()
     short = Position(
-        venue="binance", symbol="BTCUSDT", product="perp",
-        qty_base=-0.5, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        qty_base=-0.5,
+        avg_entry_px=60000.0,
     )
     df = _funding_df([(1714521600000, 0.0001)])  # 1 bps funding
     events = ledger.events_for(
@@ -55,8 +61,11 @@ def test_short_perp_collects_positive_funding() -> None:
 def test_long_perp_pays_positive_funding() -> None:
     ledger = FundingLedger()
     long = Position(
-        venue="binance", symbol="BTCUSDT", product="perp",
-        qty_base=0.5, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        qty_base=0.5,
+        avg_entry_px=60000.0,
     )
     df = _funding_df([(1714521600000, 0.0001)])
     events = ledger.events_for(
@@ -71,8 +80,11 @@ def test_long_perp_pays_positive_funding() -> None:
 def test_no_event_when_ts_not_in_funding_data() -> None:
     ledger = FundingLedger()
     short = Position(
-        venue="binance", symbol="BTCUSDT", product="perp",
-        qty_base=-0.5, avg_entry_px=60000.0,
+        venue="binance",
+        symbol="BTCUSDT",
+        product="perp",
+        qty_base=-0.5,
+        avg_entry_px=60000.0,
     )
     df = _funding_df([(1714521600000, 0.0001)])
     events = ledger.events_for(

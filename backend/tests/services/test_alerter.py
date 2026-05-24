@@ -47,9 +47,7 @@ async def test_alerter_posts_payload() -> None:
         captured["body"] = json.loads(req.content)
         return Response(200, json={"ok": True})
 
-    params = ProfileParams(
-        profile={"alerts": {"webhook_url": "https://hooks.example.com/abc"}}
-    )
+    params = ProfileParams(profile={"alerts": {"webhook_url": "https://hooks.example.com/abc"}})
 
     async with AsyncClient(transport=MockTransport(handler)) as client:
         fetcher = RetryingFetcher(client=client, max_retries=0, base_backoff_s=0.0)
@@ -76,9 +74,7 @@ async def test_alerter_swallows_post_failure() -> None:
     def handler(req: Request) -> Response:
         return Response(500, content=b"webhook down")
 
-    params = ProfileParams(
-        profile={"alerts": {"webhook_url": "https://hooks.example.com/abc"}}
-    )
+    params = ProfileParams(profile={"alerts": {"webhook_url": "https://hooks.example.com/abc"}})
 
     async with AsyncClient(transport=MockTransport(handler)) as client:
         fetcher = RetryingFetcher(client=client, max_retries=0, base_backoff_s=0.0)

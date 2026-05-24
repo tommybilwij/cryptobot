@@ -62,12 +62,26 @@ def test_fill_records_fee_and_price() -> None:
 
 
 def test_fill_qty_base_signed_buy_positive() -> None:
-    order = Order(venue="binance", symbol="BTCUSDT", product="spot", side="buy", qty_base=0.5, order_type="market")
+    order = Order(
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="buy",
+        qty_base=0.5,
+        order_type="market",
+    )
     fill = Fill(ts_ms=0, order=order, fill_px=60000.0, fee_quote=0.0)
     assert fill.qty_base_signed == 0.5
 
 
 def test_fill_qty_base_signed_sell_negative() -> None:
-    order = Order(venue="binance", symbol="BTCUSDT", product="spot", side="sell", qty_base=0.5, order_type="market")
+    order = Order(
+        venue="binance",
+        symbol="BTCUSDT",
+        product="spot",
+        side="sell",
+        qty_base=0.5,
+        order_type="market",
+    )
     fill = Fill(ts_ms=0, order=order, fill_px=60000.0, fee_quote=0.0)
     assert fill.qty_base_signed == -0.5

@@ -23,9 +23,7 @@ class BinanceWSClient:
         raise NotImplementedError("Phase 11+ scope")
         yield  # pragma: no cover  # makes this an async generator
 
-    async def next_fill_for(
-        self, order_id: str, *, timeout_s: float
-    ) -> dict[str, Any] | None:
+    async def next_fill_for(self, order_id: str, *, timeout_s: float) -> dict[str, Any] | None:
         raise NotImplementedError("Phase 11+ scope")
 
     async def close(self) -> None:

@@ -18,18 +18,14 @@ def test_lint_passes_on_clean_strategies_dir() -> None:
         text=True,
         check=False,
     )
-    assert result.returncode == 0, (
-        f"unexpected lint failure on clean tree:\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"unexpected lint failure on clean tree:\n{result.stderr}"
 
 
 def test_lint_catches_injected_literal() -> None:
     """Drop a file with a numeric literal into strategies/ and expect failure."""
     offending = STRATEGIES_DIR / "_lint_probe.py"
     offending.write_text(
-        '"""Test probe for AST lint."""\n'
-        "def evaluate() -> float:\n"
-        "    return 8.0\n"
+        '"""Test probe for AST lint."""\ndef evaluate() -> float:\n    return 8.0\n'
     )
     try:
         result = subprocess.run(

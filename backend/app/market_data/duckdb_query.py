@@ -38,9 +38,7 @@ class DuckDBQuery:
         start: datetime,
         end: datetime,
     ) -> pl.DataFrame:
-        return self._query_partitioned(
-            exchange, symbol, DataType.KLINE_1M, start, end
-        )
+        return self._query_partitioned(exchange, symbol, DataType.KLINE_1M, start, end)
 
     def funding_rates(
         self,
@@ -49,9 +47,7 @@ class DuckDBQuery:
         start: datetime,
         end: datetime,
     ) -> pl.DataFrame:
-        return self._query_partitioned(
-            exchange, symbol, DataType.FUNDING_RATE, start, end
-        )
+        return self._query_partitioned(exchange, symbol, DataType.FUNDING_RATE, start, end)
 
     def open_interest(
         self,
@@ -60,9 +56,7 @@ class DuckDBQuery:
         start: datetime,
         end: datetime,
     ) -> pl.DataFrame:
-        return self._query_partitioned(
-            exchange, symbol, DataType.OPEN_INTEREST, start, end
-        )
+        return self._query_partitioned(exchange, symbol, DataType.OPEN_INTEREST, start, end)
 
     def _query_partitioned(
         self,
@@ -72,9 +66,7 @@ class DuckDBQuery:
         start: datetime,
         end: datetime,
     ) -> pl.DataFrame:
-        files = self._select_partition_files(
-            exchange, symbol, data_type, start, end
-        )
+        files = self._select_partition_files(exchange, symbol, data_type, start, end)
         if not files:
             return pl.DataFrame()
 

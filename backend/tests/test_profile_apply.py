@@ -1,4 +1,5 @@
 """Tests for apply_profile — atomic switch with leak-gap prevention."""
+
 from __future__ import annotations
 
 import uuid
@@ -22,8 +23,12 @@ async def test_apply_switches_active_flag(db_session: AsyncSession) -> None:
     await apply_profile(db_session, b.id)
     await db_session.flush()
 
-    refreshed_a = (await db_session.execute(select(StrategyProfile).where(StrategyProfile.id == a.id))).scalar_one()
-    refreshed_b = (await db_session.execute(select(StrategyProfile).where(StrategyProfile.id == b.id))).scalar_one()
+    refreshed_a = (
+        await db_session.execute(select(StrategyProfile).where(StrategyProfile.id == a.id))
+    ).scalar_one()
+    refreshed_b = (
+        await db_session.execute(select(StrategyProfile).where(StrategyProfile.id == b.id))
+    ).scalar_one()
     assert refreshed_a.is_active is False
     assert refreshed_b.is_active is True
 
@@ -81,6 +86,7 @@ async def test_apply_resets_omitted_keys_to_defaults(db_session: AsyncSession) -
     config = await get_active_profile_config(db_session)
     params = ProfileParams(config)
     # b's profile is empty, so this resolves to the registry default:
-    assert params.get("strategies.funding_arb.entry_bps_per_8h") == (
-        PROFILE_SCOPED_DEFAULTS["strategies.funding_arb.entry_bps_per_8h"]
+    assert (
+        params.get("strategies.funding_arb.entry_bps_per_8h")
+        == (PROFILE_SCOPED_DEFAULTS["strategies.funding_arb.entry_bps_per_8h"])
     )

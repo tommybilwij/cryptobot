@@ -16,18 +16,14 @@ from app.models.strategy_profile import StrategyProfile
 
 
 def _canonical_hash(d: dict) -> str:
-    return hashlib.sha256(
-        json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 @pytest.mark.asyncio
 async def test_profile_hash_locks_at_creation(
     async_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    profile = StrategyProfile(
-        name="audit-test", version=1, is_active=False, config={"x": 1}
-    )
+    profile = StrategyProfile(name="audit-test", version=1, is_active=False, config={"x": 1})
     db_session.add(profile)
     await db_session.flush()
     await db_session.commit()
@@ -54,9 +50,7 @@ async def test_profile_hash_locks_at_creation(
 
     # The BacktestRun's hash MUST be unchanged.
     db_row = (
-        await db_session.execute(
-            select(BacktestRun).where(BacktestRun.id == uuid.UUID(run_id))
-        )
+        await db_session.execute(select(BacktestRun).where(BacktestRun.id == uuid.UUID(run_id)))
     ).scalar_one()
     assert db_row.profile_hash == expected
     assert db_row.profile_version == 1

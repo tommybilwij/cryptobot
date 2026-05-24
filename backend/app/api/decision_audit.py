@@ -32,6 +32,4 @@ async def recent(
         strategy_name=strategy_name,
         decision_type=decision_type,
     )
-    return [
-        DecisionAuditResponse.model_validate(e, from_attributes=True) for e in entries
-    ]
+    return [DecisionAuditResponse.model_validate(e, from_attributes=True) for e in entries]

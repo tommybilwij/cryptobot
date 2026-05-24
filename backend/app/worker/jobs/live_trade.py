@@ -44,9 +44,7 @@ _VENUES: tuple[str, ...] = ("binance", "bybit", "hyperliquid")
 
 def _hash(d: dict[str, Any]) -> str:
     """Stable sha256 of a profile config blob (sorted keys, compact separators)."""
-    return hashlib.sha256(
-        json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 async def run() -> None:

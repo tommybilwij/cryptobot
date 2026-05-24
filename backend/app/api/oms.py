@@ -22,9 +22,7 @@ _VENUES: tuple[str, ...] = ("binance", "bybit", "hyperliquid")
 
 
 async def _active_profile(db: AsyncSession) -> StrategyProfile | None:
-    result = await db.execute(
-        select(StrategyProfile).where(StrategyProfile.is_active.is_(True))
-    )
+    result = await db.execute(select(StrategyProfile).where(StrategyProfile.is_active.is_(True)))
     return result.scalar_one_or_none()
 
 
@@ -34,9 +32,7 @@ async def kill(body: KillRequest, db: DbSession) -> KillResponse:
     _ = body  # reason is accepted but not stored on the profile (audit trail follows)
     profile = await _active_profile(db)
     if profile is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "no active profile to flip"
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "no active profile to flip")
     new_config = dict(profile.config) if profile.config else {}
     oms_section = dict(new_config.get("oms", {}))
     oms_section["kill_switch_active"] = True
@@ -63,16 +59,11 @@ async def status_endpoint(db: DbSession) -> OMSStatusResponse:
             active_profile_version=None,
             last_dispatch_ts=None,
             last_reconciliation_status=None,
-            venues=[
-                VenueStatus(name=v, configured=False, use_testnet=True)
-                for v in _VENUES
-            ],
+            venues=[VenueStatus(name=v, configured=False, use_testnet=True) for v in _VENUES],
         )
     params = ProfileParams(profile=profile.config)
     last = await db.execute(
-        select(DecisionAuditEntry)
-        .order_by(DecisionAuditEntry.ts.desc())
-        .limit(1)
+        select(DecisionAuditEntry).order_by(DecisionAuditEntry.ts.desc()).limit(1)
     )
     last_entry = last.scalar_one_or_none()
     return OMSStatusResponse(
@@ -80,9 +71,7 @@ async def status_endpoint(db: DbSession) -> OMSStatusResponse:
         active_profile_id=str(profile.id),
         active_profile_version=profile.version,
         last_dispatch_ts=last_entry.ts if last_entry else None,
-        last_reconciliation_status=(
-            last_entry.reconciliation_status if last_entry else None
-        ),
+        last_reconciliation_status=(last_entry.reconciliation_status if last_entry else None),
         venues=[
             VenueStatus(
                 name=v,

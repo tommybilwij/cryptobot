@@ -43,11 +43,19 @@ class FundingArbSkeleton:
         qty = spot_notional / spot_bar.close
         return [
             Order(
-                venue=self._venue, symbol=self._symbol, product="spot",
-                side="buy", qty_base=qty, order_type="market",
+                venue=self._venue,
+                symbol=self._symbol,
+                product="spot",
+                side="buy",
+                qty_base=qty,
+                order_type="market",
             ),
             Order(
-                venue=self._venue, symbol=self._symbol, product="perp",
-                side="sell", qty_base=qty, order_type="market",
+                venue=self._venue,
+                symbol=self._symbol,
+                product="perp",
+                side="sell",
+                qty_base=qty,
+                order_type="market",
             ),
         ]

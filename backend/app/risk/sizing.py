@@ -69,25 +69,21 @@ class SizingService:
             non-positive, vol is degenerate, or the drawdown brake at full
             halt collapses the multiplier all the way down to ``min_mult``.
         """
-        intervals_per_year = float(
-            self._params.get("strategies.funding_arb.intervals_per_year")
-        )
+        intervals_per_year = float(self._params.get("strategies.funding_arb.intervals_per_year"))
         baseline_cap = float(self._params.get("risk.kelly.baseline_cap"))
         kelly_fraction = float(self._params.get("risk.kelly.fraction"))
         vol_target = float(self._params.get("risk.vol_target.target_pct"))
         trigger_pct = float(self._params.get("risk.drawdown_brake.trigger_pct"))
         full_pct = float(self._params.get("risk.drawdown_brake.full_pct"))
         min_mult = float(self._params.get("risk.drawdown_brake.min_mult"))
-        cash_frac_cap = float(
-            self._params.get("strategies.funding_arb.max_cash_fraction")
-        )
+        cash_frac_cap = float(self._params.get("strategies.funding_arb.max_cash_fraction"))
 
         # Kelly: annualised expected return / vol^2, scaled by fraction (half
         # Kelly by default). Degenerate vol short-circuits to zero.
         if realized_vol < _MIN_VOL:
             return 0.0
         annualised_return = funding_rate_per_interval * intervals_per_year
-        kelly = (annualised_return / (realized_vol ** _TWO)) * kelly_fraction
+        kelly = (annualised_return / (realized_vol**_TWO)) * kelly_fraction
         if kelly <= 0.0:
             return 0.0
         kelly = min(kelly, baseline_cap)

@@ -1,4 +1,5 @@
 """ProfileService — orchestrates validation, persistence, and apply mechanics."""
+
 from __future__ import annotations
 
 import uuid
@@ -47,9 +48,7 @@ class ProfileService:
     async def apply(self, profile_id: uuid.UUID) -> StrategyProfile:
         return await apply_profile(self._session, profile_id)
 
-    async def clone(
-        self, profile_id: uuid.UUID, *, new_name: str
-    ) -> StrategyProfile:
+    async def clone(self, profile_id: uuid.UUID, *, new_name: str) -> StrategyProfile:
         source = await self._repo.get(profile_id)
         if source is None:
             raise LookupError(f"strategy profile {profile_id} not found")

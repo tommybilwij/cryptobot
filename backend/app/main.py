@@ -1,4 +1,5 @@
 """FastAPI application entrypoint."""
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -15,7 +16,7 @@ from app.api import (
 )
 from app.deps import lifespan
 
-app = FastAPI(title="cryptobot", version="0.13.0", lifespan=lifespan)
+app = FastAPI(title="cryptobot", version="0.14.0", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(strategy_profiles.router)
 app.include_router(data_health.router)

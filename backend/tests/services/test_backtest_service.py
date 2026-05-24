@@ -42,9 +42,7 @@ def _write_klines(root: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_persists_and_writes_curve(
-    db_session: AsyncSession, tmp_path: Path
-) -> None:
+async def test_run_persists_and_writes_curve(db_session: AsyncSession, tmp_path: Path) -> None:
     parquet_root = tmp_path / "parquet"
     parquet_root.mkdir()
     _write_klines(parquet_root)
@@ -89,16 +87,12 @@ async def test_run_persists_and_writes_curve(
 
 
 @pytest.mark.asyncio
-async def test_run_marks_failed_on_no_data(
-    db_session: AsyncSession, tmp_path: Path
-) -> None:
+async def test_run_marks_failed_on_no_data(db_session: AsyncSession, tmp_path: Path) -> None:
     parquet_root = tmp_path / "parquet"
     parquet_root.mkdir()
     curves_root = tmp_path / "backtest_runs"
 
-    profile = StrategyProfile(
-        name="empty-profile", version=1, is_active=False, config={}
-    )
+    profile = StrategyProfile(name="empty-profile", version=1, is_active=False, config={})
     db_session.add(profile)
     await db_session.flush()
 

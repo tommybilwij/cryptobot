@@ -67,11 +67,13 @@ def build_exchange(  # noqa: PLR0911 — one return per venue branch + paper fal
             logger.warning("binance keys missing; falling back to paper")
             return PaperExchange(venue=venue, params=params, initial_cash=_DEFAULT_INITIAL_CASH)
         url_key = (
-            "exchanges.binance.spot_base_url_testnet" if use_testnet
+            "exchanges.binance.spot_base_url_testnet"
+            if use_testnet
             else "exchanges.binance.spot_base_url_mainnet"
         )
         return BinanceExchange(
-            fetcher=fetcher, params=params,
+            fetcher=fetcher,
+            params=params,
             api_key=api_key,
             api_secret=api_secret,
             base_url=str(params.get(url_key)),
@@ -84,29 +86,31 @@ def build_exchange(  # noqa: PLR0911 — one return per venue branch + paper fal
             logger.warning("bybit keys missing; falling back to paper")
             return PaperExchange(venue=venue, params=params, initial_cash=_DEFAULT_INITIAL_CASH)
         url_key = (
-            "exchanges.bybit.base_url_testnet" if use_testnet
+            "exchanges.bybit.base_url_testnet"
+            if use_testnet
             else "exchanges.bybit.base_url_mainnet"
         )
         return BybitExchange(
-            fetcher=fetcher, params=params,
+            fetcher=fetcher,
+            params=params,
             api_key=api_key,
             api_secret=api_secret,
             base_url=str(params.get(url_key)),
         )
 
     if venue == "hyperliquid":
-        wallet_private_key = _resolve_key(
-            settings, "hyperliquid_wallet_private_key", sub_account
-        )
+        wallet_private_key = _resolve_key(settings, "hyperliquid_wallet_private_key", sub_account)
         if not wallet_private_key:
             logger.warning("hyperliquid key missing; falling back to paper")
             return PaperExchange(venue=venue, params=params, initial_cash=_DEFAULT_INITIAL_CASH)
         url_key = (
-            "exchanges.hyperliquid.base_url_testnet" if use_testnet
+            "exchanges.hyperliquid.base_url_testnet"
+            if use_testnet
             else "exchanges.hyperliquid.base_url_mainnet"
         )
         return HyperliquidExchange(
-            fetcher=fetcher, params=params,
+            fetcher=fetcher,
+            params=params,
             wallet_private_key=wallet_private_key,
             base_url=str(params.get(url_key)),
         )
