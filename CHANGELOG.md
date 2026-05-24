@@ -1,5 +1,14 @@
 # Changelog
 
+### v0.16.0 (2026-05-24)
+
+#### Features
+- `ICTracker` in `backend/app/risk/ic_tracker.py` — records `(score, forward_return)` per scoring component, computes rolling Spearman rank correlation (pure-Python; no scipy dep). `deprecate_if_drifting()` auto-buries components whose IC falls below threshold
+- `ComponentGraveyard` in `backend/app/risk/component_graveyard.py` — in-memory set of deprecated scoring components with `add` / `is_buried` / `list` / `revive` API
+- `ScoringEngine` accepts optional `graveyard: ComponentGraveyard | None`; buried components are skipped (treated as 0) on each `score()` call — surviving components contribute their normal weighted contribution
+- Average-rank Spearman handles ties correctly; degenerate input (n < 2 or zero variance) returns 0.0
+- 8 new tests: 3 graveyard (`test_component_graveyard.py`), 4 IC tracker (`test_ic_tracker.py`), 1 scoring engine integration. 272 prior + 8 = 280 tests pass
+
 ### v0.15.0 (2026-05-24)
 
 #### Features

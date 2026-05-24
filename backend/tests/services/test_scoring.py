@@ -92,3 +92,15 @@ def test_negative_total_returns_skip_bucket() -> None:
     )
     assert s.bucket == "skip"
     assert s.total < 0.0
+
+
+def test_graveyard_skips_buried_component() -> None:
+    from app.risk.component_graveyard import ComponentGraveyard
+    g = ComponentGraveyard()
+    g.add("momentum_30d", reason="test")
+    e = ScoringEngine(params=ProfileParams(profile={}), graveyard=g)
+    s = e.score(symbol="BTCUSDT", features={"momentum_30d": 1.0})
+    # momentum_30d skipped → only 3 components remain
+    assert len(s.components) == 3
+    names = {c.name for c in s.components}
+    assert "momentum_30d" not in names

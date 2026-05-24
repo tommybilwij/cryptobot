@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.profile.params import ProfileParams
+from app.risk.component_graveyard import ComponentGraveyard
 
 _COMPONENT_NAMES = ("momentum_30d", "funding_yield", "realized_vol", "volume_rank")
 
@@ -33,13 +34,21 @@ class CompositeScore:
 
 
 class ScoringEngine:
-    def __init__(self, *, params: ProfileParams) -> None:
+    def __init__(
+        self,
+        *,
+        params: ProfileParams,
+        graveyard: ComponentGraveyard | None = None,
+    ) -> None:
         self._params = params
+        self._graveyard = graveyard
 
     def score(self, *, symbol: str, features: dict[str, float]) -> CompositeScore:
         components: list[ComponentScore] = []
         total = 0.0
         for name in _COMPONENT_NAMES:
+            if self._graveyard is not None and self._graveyard.is_buried(name):
+                continue  # skip buried components
             raw = features.get(name, 0.0)
             max_s = float(self._params.get(f"strategies.factor_portfolio.scoring.{name}.max_score"))
             weight = float(self._params.get(f"strategies.factor_portfolio.scoring.{name}.weight"))
