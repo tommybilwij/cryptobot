@@ -46,5 +46,14 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
 
+    # --- DB connection pool sizing (HP7) ---
+    # SQLAlchemy defaults (5/10/30) are fine for dev. Bump pool_size for
+    # workers that spawn lots of concurrent backtests, or max_overflow for
+    # short bursts. Pool timeout is the seconds a request waits for a free
+    # connection before raising ``TimeoutError``.
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: float = 30.0
+
 
 settings = Settings()

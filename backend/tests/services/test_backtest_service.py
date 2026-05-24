@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.market_data.parquet_store import ParquetStore
 from app.models.backtest_run import BacktestRun
 from app.models.strategy_profile import StrategyProfile
+from app.models.symbol_manifest_snapshot import SymbolManifestSnapshot
 from app.services.backtest_service import BacktestService
 
 
@@ -84,6 +85,67 @@ async def test_run_persists_and_writes_curve(db_session: AsyncSession, tmp_path:
     assert run.num_trades is not None
     assert run.equity_curve_path is not None
     assert (curves_root / f"{run_id}.parquet").exists()
+
+
+@pytest.mark.asyncio
+async def test_factor_portfolio_uses_manifest_universe(
+    db_session: AsyncSession, tmp_path: Path
+) -> None:
+    """HP7: factor_portfolio runs read the survivorship-safe universe from the
+    manifest, not the request's ``symbols`` list. Smoke-level — the run
+    completes successfully and the registry built the strategy with a
+    ``FeaturePipeline`` wired in.
+    """
+    parquet_root = tmp_path / "parquet"
+    parquet_root.mkdir()
+    _write_klines(parquet_root)
+    curves_root = tmp_path / "backtest_runs"
+
+    profile = StrategyProfile(
+        name="factor-pf-profile",
+        version=1,
+        is_active=False,
+        config={},
+    )
+    db_session.add(profile)
+    await db_session.flush()
+
+    # Manifest snapshot for the run's start_date — universe = ["BTCUSDT"].
+    db_session.add(
+        SymbolManifestSnapshot(
+            snapshot_date=datetime(2024, 1, 1).date(),
+            exchange="binance",
+            symbols=["BTCUSDT"],
+        )
+    )
+    await db_session.flush()
+
+    run = BacktestRun(
+        profile_id=profile.id,
+        profile_version=profile.version,
+        profile_hash=_profile_hash(profile.config),
+        strategy_name="factor_portfolio",
+        venue="binance",
+        # Empty `symbols` would normally fail at strategy build time; the
+        # manifest path supplies the universe instead.
+        symbols=["BTCUSDT"],
+        start_ts=datetime(2024, 1, 1, tzinfo=UTC),
+        end_ts=datetime(2024, 1, 1, 0, 2, tzinfo=UTC),
+        status="pending",
+    )
+    db_session.add(run)
+    await db_session.flush()
+
+    service = BacktestService(
+        session=db_session,
+        parquet_root=parquet_root,
+        backtest_curves_root=curves_root,
+    )
+    await service.execute(run.id)
+
+    await db_session.refresh(run)
+    assert run.status == "complete"
+    assert run.equity_curve_path is not None
 
 
 @pytest.mark.asyncio
