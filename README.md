@@ -309,6 +309,65 @@ curl -X POST http://localhost:8000/api/v1/live/stop
 - **Kelly + vol-target sizing** → Phase 10+
 - **WebSocket fills** → Phase 11+
 
+## First live $500 (Phase 9 runbook)
+
+Phase 9 ships the safety infrastructure for real-money trading. The first
+$500 trade is an OPS action — flip flags, fund a wallet, monitor closely.
+
+### Pre-flight checklist (DO ALL OF THESE)
+
+- [ ] Phase 7 testnet smoke tests passed against your testnet wallets
+- [ ] Phase 8 dry-run loop ran for ≥ 24h with no halts
+- [ ] All halt classes tested by deliberately triggering them in dry-run
+- [ ] Webhook URL configured (`alerts.webhook_url`) and verified working
+- [ ] You can stop the runner via `POST /api/v1/live/stop` within 10s
+- [ ] Drawdown brake trigger (`risk.drawdown_brake.trigger_pct`) reviewed and set
+- [ ] $500 USDC deposited to ONLY the configured venue (start with one, not all three)
+- [ ] API keys: withdrawals disabled, IP-whitelisted to deploy host
+
+### Flag-flip sequence
+
+1. Set `exchanges.{venue}.use_testnet=False` on active profile (switches URLs to mainnet)
+2. Set `live.dry_run_mode=False` (switches PaperExchange → real adapter)
+3. Restart the runner: `docker compose --profile live up -d --force-recreate worker-live-trade`
+4. Tail logs: `docker compose logs -f worker-live-trade`
+5. Monitor `/api/v1/live/status` every minute for the first hour
+
+### Rollback (immediate stop)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/oms/kill   # halt OMS dispatches mid-flight
+curl -X POST http://localhost:8000/api/v1/live/stop  # exit the runner loop
+```
+
+### Webhook payload shape
+
+```json
+{
+  "severity": "critical | warning | info",
+  "event": "DrawdownBrakeHalt | KillSwitchActive | HedgeDriftHalt | ReconciliationDriftHalt | heartbeat",
+  "details": { "...": "event-specific" },
+  "ts": "2026-05-24T05:55:00Z"
+}
+```
+
+Set `alerts.webhook_url` to your Discord/Slack/Telegram webhook BEFORE flipping flags. Halt classes auto-alert at `severity=critical`; reconciliation drift at `warning`; heartbeats are opt-in via `alerts.send_heartbeats=True`.
+
+### Safe-by-default toggles
+
+| Key | Default | Production value |
+|---|---|---|
+| `live.enabled` | `False` | `True` (start the loop) |
+| `live.dry_run_mode` | `True` | `False` (real money) |
+| `exchanges.{venue}.use_testnet` | `True` | `False` (mainnet URLs) |
+| `alerts.webhook_url` | `""` | your webhook (REQUIRED for live) |
+
+Adapter factory falls back to PaperExchange if env keys are missing — even with all flags flipped, a misconfigured deploy can't accidentally hit live without keys.
+
+### When to scale beyond $500
+
+After the first $500 runs for 1-2 weeks with no halts, no manual intervention, and positive funding-arb P&L net of fees → Phase 10+ (Kelly sizing + vol targeting + capital scale-up).
+
 ## Layout
 
 ```
