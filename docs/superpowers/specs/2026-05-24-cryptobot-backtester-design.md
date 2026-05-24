@@ -4,7 +4,7 @@
 **Status**: approved (brainstorming)
 **Phase**: 4 of the cryptobot build
 **Blocks**: Phase 5 (exchange adapters), Phase 6 (Strategy A funding arb), Phase 14+ (factor portfolio backtests, IC discipline)
-**Revision history**: v1 — initial. PR #<fill-in-after-merge>.
+**Revision history**: v1 — initial. PR #6.
 
 ## Goal
 
