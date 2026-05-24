@@ -48,6 +48,12 @@ export default function ProfilesPage() {
               >
                 {p.name}
               </button>
+              <a
+                href={`/profiles/${p.id}/edit`}
+                className="text-zinc-400 text-xs hover:text-blue-400"
+              >
+                edit
+              </a>
               <span className="text-xs text-zinc-500">v{p.version}</span>
               <StatusBadge active={p.is_active} label={p.is_active ? "active" : "inactive"} />
             </div>

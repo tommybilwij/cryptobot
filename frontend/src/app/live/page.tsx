@@ -69,6 +69,9 @@ export default function LivePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold mb-2">Live Runner</h1>
+        <a href="/live/ticks" className="text-blue-400 text-sm hover:underline">
+          view tick history →
+        </a>
         <div className="flex gap-3 items-center">
           <StatusBadge active={status.enabled} label={status.enabled ? "ENABLED" : "stopped"} />
           <StatusBadge active={status.dry_run_mode} label={status.dry_run_mode ? "dry-run" : "LIVE"} />
