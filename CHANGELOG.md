@@ -1,5 +1,15 @@
 # Changelog
 
+### v0.12.0 (2026-05-24)
+
+#### Features
+- `FundingArbStrategy` now accepts `symbols: list[str]` instead of `symbol: str` — the strategy loops over its configured symbols on every tick and emits orders per symbol
+- Cash splits equally across the configured symbols when opening a hedge (`cash_per_symbol = state.cash_quote / len(symbols)`), so a 2-symbol profile with $1000 cash sizes each leg from $500
+- Backward-compat: a single-element list `symbols=["BTCUSDT"]` is functionally identical to the pre-Phase-12 single-symbol mode; all 10 existing single-symbol tests pass unchanged after the constructor swap
+- `BacktestService` branches on `strategy_name`: `funding_arb` receives the full `symbols` list, other (still single-symbol) strategies receive `run.symbols[0]`
+- `live_trade` worker wraps `strategies.funding_arb.default_symbol` into `symbols=[symbol]`; future phase will read a registry list directly
+- 2 new tests: `test_multi_symbol_emits_orders_per_symbol` (2 symbols × spot+perp = 4 orders), `test_multi_symbol_splits_cash` (each symbol sized from `cash / N`)
+
 ### v0.11.0 (2026-05-24)
 
 #### Features
