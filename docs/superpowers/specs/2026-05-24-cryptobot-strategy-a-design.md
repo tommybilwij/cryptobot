@@ -4,7 +4,7 @@
 **Status**: approved (autonomous mode — user delegated design defaults)
 **Phase**: 6 of the cryptobot build
 **Blocks**: Phase 7 (testnet end-to-end), Phase 8 (dry-run), Phase 9 (live $500)
-**Revision history**: v1 — initial. PR #<fill-in-after-merge>.
+**Revision history**: v1 — initial. PR #8.
 
 ## Goal
 
