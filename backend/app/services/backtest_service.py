@@ -45,11 +45,20 @@ class BacktestService:
             profile = await self._load_profile(run.profile_id)
             params = ProfileParams(profile=profile.config)
 
-            # First symbol is the validator symbol for these stub strategies
-            symbol = run.symbols[0]
-            strategy = self._registry.build(
-                run.strategy_name, venue=run.venue, symbol=symbol
-            )
+            # Phase 12: ``funding_arb`` now takes ``symbols: list[str]`` and
+            # loops internally; the other strategies remain single-symbol
+            # stubs and take the first symbol as their validator.
+            if run.strategy_name == "funding_arb":
+                strategy = self._registry.build(
+                    run.strategy_name,
+                    venue=run.venue,
+                    symbols=list(run.symbols),
+                )
+            else:
+                symbol = run.symbols[0]
+                strategy = self._registry.build(
+                    run.strategy_name, venue=run.venue, symbol=symbol
+                )
             products: list[Product] = (
                 ["spot", "perp"]
                 if run.strategy_name in {"funding_arb_skeleton", "funding_arb"}
