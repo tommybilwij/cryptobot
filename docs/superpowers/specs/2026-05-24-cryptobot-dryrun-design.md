@@ -4,7 +4,7 @@
 **Status**: approved (autonomous mode)
 **Phase**: 8 of the cryptobot build
 **Blocks**: Phase 9 ($500 live trade)
-**Revision history**: v1 — initial. PR #<fill-in-after-merge>.
+**Revision history**: v1 — initial. PR #10.
 
 ## Goal
 
