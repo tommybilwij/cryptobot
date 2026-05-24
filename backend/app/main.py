@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    alerts,
     backtests,
     data_health,
     decision_audit,
@@ -38,3 +39,4 @@ app.include_router(decision_audit.router)
 app.include_router(exchanges.router)
 app.include_router(live.router)
 app.include_router(metrics.router)
+app.include_router(alerts.router)
