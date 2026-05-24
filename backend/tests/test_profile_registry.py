@@ -315,3 +315,12 @@ def test_per_venue_funding_intervals_present() -> None:
     assert PROFILE_SCOPED_DEFAULTS["exchanges.binance.funding_intervals_per_year"] == 1095.75
     assert PROFILE_SCOPED_DEFAULTS["exchanges.bybit.funding_intervals_per_year"] == 1095.75
     assert PROFILE_SCOPED_DEFAULTS["exchanges.hyperliquid.funding_intervals_per_year"] == 8766.0
+
+
+def test_oms_partial_fill_and_auto_rebalance_keys_present() -> None:
+    """HP4: partial-fill aggregation + opt-in hedge auto-rebalance keys."""
+    from app.profile.defaults import PROFILE_SCOPED_BOOL_DEFAULTS, PROFILE_SCOPED_DEFAULTS
+
+    assert PROFILE_SCOPED_DEFAULTS["oms.partial_fill_min_remainder_qty"] == 0.0001
+    assert PROFILE_SCOPED_DEFAULTS["oms.max_partial_fill_retries"] == 3
+    assert PROFILE_SCOPED_BOOL_DEFAULTS["oms.hedge_auto_rebalance_enabled"] is False
