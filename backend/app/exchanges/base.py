@@ -42,3 +42,12 @@ class Exchange(Protocol):
     async def fetch_mark_price(self, symbol: str, product: Product) -> float:
         """Current mark / index / last-price for the (symbol, product) pair."""
         ...
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        """Most recent perp funding rate for ``symbol``, or ``None`` if unknown.
+
+        Convention: returned as a decimal fraction per funding interval (e.g.
+        ``0.0001`` = 1 bp / interval), matching venue REST conventions. Callers
+        convert to bps/8h as needed via the venue's funding_period_minutes.
+        """
+        ...

@@ -162,6 +162,14 @@ PROFILE_SCOPED_STRING_DEFAULTS: dict[str, str] = {
     "backtest.slippage_model": "book_proxy",
     "backtest.rebalance_clock": "exchange_time",
     "backtest.data_source": "parquet",
+    # ── Per-venue base URLs (testnet + mainnet) ──────────────────────────
+    "exchanges.binance.spot_base_url_testnet": "https://testnet.binance.vision",
+    "exchanges.binance.perp_base_url_testnet": "https://testnet.binancefuture.com",
+    "exchanges.binance.spot_base_url_mainnet": "https://api.binance.com",
+    "exchanges.bybit.base_url_testnet": "https://api-testnet.bybit.com",
+    "exchanges.bybit.base_url_mainnet": "https://api.bybit.com",
+    "exchanges.hyperliquid.base_url_testnet": "https://api.hyperliquid-testnet.xyz",
+    "exchanges.hyperliquid.base_url_mainnet": "https://api.hyperliquid.xyz",
 }
 
 

@@ -40,10 +40,15 @@ class PaperExchange:
         self._positions: dict[tuple[str, Product], ExchangePosition] = {}
         self._marks: dict[tuple[str, Product], float] = {}
         self._orders: dict[str, OrderStatus] = {}
+        self._funding_rates: dict[str, float] = {}
 
     def set_mark_price(self, symbol: str, product: Product, px: float) -> None:
         """Test helper: set the mark price used for fills + mark-to-market."""
         self._marks[(symbol, product)] = px
+
+    def set_funding_rate(self, symbol: str, rate: float) -> None:
+        """Test helper: set the funding rate returned by ``fetch_funding_rate``."""
+        self._funding_rates[symbol] = rate
 
     async def fetch_balance(self, quote_currency: str) -> Balance:
         return Balance(
@@ -61,6 +66,9 @@ class PaperExchange:
         if mark is None:
             raise KeyError(f"no mark set for {symbol}/{product}")
         return mark
+
+    async def fetch_funding_rate(self, symbol: str) -> float | None:
+        return self._funding_rates.get(symbol)
 
     async def place_order(self, order: Order) -> OrderReceipt:
         order_id = uuid.uuid4().hex

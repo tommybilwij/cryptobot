@@ -82,3 +82,18 @@ async def test_paper_cancel_pending_is_noop_for_market_fills() -> None:
     await ex.cancel_order(receipt.order_id)
     status = await ex.fetch_order(receipt.order_id)
     assert status.status == "filled"
+
+
+@pytest.mark.asyncio
+async def test_paper_fetch_funding_rate_returns_configured_rate() -> None:
+    ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
+    ex.set_funding_rate("BTCUSDT", 0.0001)
+    rate = await ex.fetch_funding_rate("BTCUSDT")
+    assert rate == 0.0001
+
+
+@pytest.mark.asyncio
+async def test_paper_fetch_funding_rate_missing_returns_none() -> None:
+    ex = PaperExchange(venue="binance", params=_params(), initial_cash=10_000.0)
+    rate = await ex.fetch_funding_rate("BTCUSDT")
+    assert rate is None
