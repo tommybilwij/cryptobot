@@ -63,6 +63,25 @@ services:
         condition: service_healthy
     profiles: ["jobs"]   # not started by default; `docker compose --profile jobs run worker-refresh-data`
 
+  worker-run-backtest:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cryptobot-worker-run-backtest
+    restart: "no"
+    command: uv run python -m app.worker.main
+    environment:
+      WORKER_JOB: run_backtest
+      BACKTEST_ID: ${BACKTEST_ID:?BACKTEST_ID is required}
+      DATABASE_URL: postgresql+asyncpg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+      DATABASE_URL_SYNC: postgresql+psycopg://cryptobot:${POSTGRES_PASSWORD:-devpass}@postgres:5432/cryptobot
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["jobs"]
+
   strategy-runner-funding-arb:
     build:
       context: ./backend

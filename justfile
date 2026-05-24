@@ -66,3 +66,7 @@ load-fixtures:
 # Run the refresh_data worker job once (uses the WORKER_JOB env)
 refresh-data:
     cd backend && WORKER_JOB=refresh_data uv run python -m app.worker.main
+
+# Run a single backtest by id (uses WORKER_JOB=run_backtest)
+backtest BACKTEST_ID:
+    cd backend && WORKER_JOB=run_backtest BACKTEST_ID={{BACKTEST_ID}} uv run python -m app.worker.main

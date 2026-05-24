@@ -90,6 +90,50 @@ q = DuckDBQuery(parquet_root=Path("data/parquet"))
 df = q.klines("binance", "BTCUSDT", datetime(2024, 1, 1), datetime(2024, 1, 31))
 ```
 
+## Backtester (Phase 4)
+
+Run a backtest by creating a `BacktestRun` row + dispatching the worker. End-to-end:
+
+### Via API
+
+```bash
+# Create a pending run; profile_hash + profile_version locked at row creation
+curl -X POST http://localhost:8000/api/v1/backtests \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "<uuid>",
+    "strategy_name": "buy_and_hold",
+    "start_ts": "2024-01-01T00:00:00Z",
+    "end_ts":   "2024-01-31T23:59:00Z",
+    "venue":    "binance",
+    "symbols": ["BTCUSDT"]
+  }'
+
+# Then fire the worker with the returned run_id
+docker compose --profile jobs run --rm -e BACKTEST_ID=<run_id> worker-run-backtest
+```
+
+### Via just
+
+```bash
+just backtest <run_id>
+```
+
+### Polling
+
+```bash
+curl http://localhost:8000/api/v1/backtests/<run_id>
+```
+
+Result includes `total_return`, `sharpe`, `max_drawdown`, `num_trades`, and `equity_curve_path` (a Parquet file under `data/backtest_runs/`).
+
+### Available strategies
+
+- `buy_and_hold` — engine validator: opens one long spot position on the first tick, holds.
+- `funding_arb_skeleton` — engine validator: opens a delta-neutral (long spot + short perp) pair on first tick, holds. Exercises funding accounting.
+
+Real strategies (Strategy A funding arb with calibration, Strategy B factor portfolio) ship in Phase 6+.
+
 ## Layout
 
 ```

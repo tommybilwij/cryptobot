@@ -36,3 +36,22 @@ async def test_refresh_data_invokes_pipeline_per_symbol() -> None:
     call_args = [c.kwargs for c in fake_pipeline.refresh_klines_1m.call_args_list]
     assert {a["symbol"] for a in call_args} == {"BTCUSDT", "ETHUSDT"}
     assert all(a["year"] == 2026 and a["month"] == 5 for a in call_args)
+
+
+@pytest.mark.asyncio
+async def test_run_backtest_dispatches() -> None:
+    from app.worker.main import _resolve_job
+
+    job = _resolve_job("run_backtest")
+    assert callable(job)
+
+
+@pytest.mark.asyncio
+async def test_run_backtest_requires_backtest_id_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("BACKTEST_ID", raising=False)
+    from app.worker.jobs.run_backtest import run
+
+    with pytest.raises(KeyError, match="BACKTEST_ID"):
+        await run()
