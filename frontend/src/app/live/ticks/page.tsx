@@ -51,29 +51,17 @@ export default function TicksPage() {
             className="border border-zinc-800 rounded p-2 text-xs font-mono flex gap-4"
           >
             <span className="text-zinc-500 w-44">{e.ts}</span>
-            <span className="text-green-400">
-              eq: {e.input_state.equity?.toFixed(2) ?? "—"}
-            </span>
-            <span className="text-zinc-400">
-              cash: {e.input_state.cash?.toFixed(2) ?? "—"}
-            </span>
-            <span className="text-zinc-500">
-              peak: {e.input_state.peak?.toFixed(2) ?? "—"}
-            </span>
+            <span className="text-green-400">eq: {e.input_state.equity?.toFixed(2) ?? "—"}</span>
+            <span className="text-zinc-400">cash: {e.input_state.cash?.toFixed(2) ?? "—"}</span>
+            <span className="text-zinc-500">peak: {e.input_state.peak?.toFixed(2) ?? "—"}</span>
             <span
-              className={
-                e.reconciliation_status === "ok"
-                  ? "text-zinc-600"
-                  : "text-yellow-400"
-              }
+              className={e.reconciliation_status === "ok" ? "text-zinc-600" : "text-yellow-400"}
             >
               {e.reconciliation_status}
             </span>
           </div>
         ))}
-        {entries.length === 0 && (
-          <div className="text-zinc-500">No snapshots yet.</div>
-        )}
+        {entries.length === 0 && <div className="text-zinc-500">No snapshots yet.</div>}
       </div>
     </div>
   );

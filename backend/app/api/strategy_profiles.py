@@ -7,9 +7,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db
+from app.models.strategy_profile import StrategyProfile
 from app.services.profile_service import ProfileService
 
 router = APIRouter(prefix="/api/v1/strategy-profiles", tags=["strategy-profiles"])
@@ -25,6 +27,10 @@ class ProfileCreateRequest(BaseModel):
 
 class CloneRequest(BaseModel):
     new_name: str = Field(min_length=1, max_length=120)
+
+
+class UpdateConfigRequest(BaseModel):
+    config: dict[str, Any]
 
 
 class ProfileResponse(BaseModel):
@@ -102,3 +108,30 @@ async def clone(
         raise HTTPException(status_code=404, detail=str(e)) from e
     await db.commit()
     return ProfileResponse.model_validate(row, from_attributes=True)
+
+
+@router.post("/{profile_id}/update-config", response_model=ProfileResponse)
+async def update_config(
+    profile_id: uuid.UUID,
+    req: UpdateConfigRequest,
+    db: DbSession,
+) -> ProfileResponse:
+    """Replace a profile's config blob and bump its version.
+
+    Used by the Strategy Lab editor. The new config is persisted as-is;
+    callers that need validation should use the ProfileService.create path
+    or run the Pydantic schema themselves. ``apply`` remains the only way
+    to make a profile active.
+    """
+    result = await db.execute(
+        select(StrategyProfile).where(StrategyProfile.id == profile_id)
+    )
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    profile.config = req.config
+    profile.version = profile.version + 1
+    await db.flush()
+    await db.commit()
+    await db.refresh(profile)
+    return ProfileResponse.model_validate(profile, from_attributes=True)

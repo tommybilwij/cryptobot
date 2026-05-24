@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from app.logging_config import setup_logging
 from app.services.data_pipeline import DataPipelineService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ async def run() -> None:
     Reads active profile to determine the universe, builds a real pipeline,
     delegates to run_with. Kept thin so unit tests can drive run_with directly.
     """
+    setup_logging()
     # Wiring happens in a later task (real DB session + profile lookup); for now,
     # log that the job ran with no work to do.
     logger.info("refresh_data: stub run — no active profile loaded yet")

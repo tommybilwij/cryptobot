@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session_factory
+from app.logging_config import setup_logging
 from app.services.backtest_service import BacktestService
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ async def run() -> None:
     Raises:
         KeyError: If ``BACKTEST_ID`` env var is unset.
     """
+    setup_logging()
     raw_id = os.environ.get("BACKTEST_ID")
     if not raw_id:
         raise KeyError("BACKTEST_ID env var required for run_backtest job")

@@ -1,6 +1,6 @@
 # Multi-stage Python image built with uv. Shared by api, worker,
 # strategy-runner-funding-arb, strategy-runner-factor-portfolio services.
-FROM python:3.12-slim AS base
+FROM python:3.12-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

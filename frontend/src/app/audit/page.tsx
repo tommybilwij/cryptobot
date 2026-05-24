@@ -70,13 +70,22 @@ export default function AuditPage() {
             <div className="flex gap-3 items-center">
               <span className="text-zinc-500">{e.ts}</span>
               <span className="text-blue-400">{e.strategy_name}</span>
-              <span className={
-                e.reconciliation_status === "ok" ? "text-green-400" :
-                e.reconciliation_status.startsWith("halt") ? "text-red-400" : "text-yellow-400"
-              }>{e.reconciliation_status}</span>
+              <span
+                className={
+                  e.reconciliation_status === "ok"
+                    ? "text-green-400"
+                    : e.reconciliation_status.startsWith("halt")
+                      ? "text-red-400"
+                      : "text-yellow-400"
+                }
+              >
+                {e.reconciliation_status}
+              </span>
               <span className="text-zinc-500">v{e.profile_version}</span>
               <span className="text-zinc-600">{e.decision_type}</span>
-              <span className="text-zinc-500">{e.orders.length}o/{e.fills.length}f</span>
+              <span className="text-zinc-500">
+                {e.orders.length}o/{e.fills.length}f
+              </span>
             </div>
             {e.reason && <div className="mt-1 text-red-400">{e.reason}</div>}
           </div>
